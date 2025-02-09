@@ -1,0 +1,6 @@
+{
+  "api_key": "YOUR_OPENWEATHERMAP_API_KEY",
+  "latitude": YOUR_LATITUDE,
+  "longitude": YOUR_LONGITUDE,
+  "server_ip": "YOUR_ESP32_IP_ADDRESS"
+}
