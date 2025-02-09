@@ -20,8 +20,6 @@ def main():
     logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
     logger = logging.getLogger(__name__)
     parser = argparse.ArgumentParser(description="Upload processed image data to ESP32.")
-    parser.add_argument("--ip", dest="esp_ip", default=DEFAULT_ESP_IP, help="ESP32 IP address")
-    parser.add_argument("--url", dest="upload_url", default=DEFAULT_UPLOAD_URL, help="ESP32 upload url")
     parser.add_argument("--image", dest="image_path", default=DEFAULT_IMAGE_PATH, help="Path to the image file")
 
     args = parser.parse_args()
