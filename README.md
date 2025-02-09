@@ -37,7 +37,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 
 1. **Configure ESP32:**
    * Follow the instructions in the Waveshare e-Paper Wiki to set up the display with your ESP32. You'll need to install the ESP32 Arduino core and the e-Paper driver library.
-   * Flash the ino file in the "Loader_esp32wf" of the linked fw above. This creates a web interface on the ESP32 that allows uploading images.
+   * Flash the ino file in the "Loader_esp32wf" of the linked fw above. Update wifi details in the srvr.h file. This creates a web interface on the ESP32 that allows uploading images.
 2. **Configure Python Script:**
    * Obtain an API key from OpenWeatherMap.
    * Create a `config.json` file (see example above) and fill in your API key, latitude, longitude, ESP32 IP address, and upload URL.
