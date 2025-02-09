@@ -12,6 +12,8 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 
 ![Alt text](images/weather.png)
 
+![Alt text](images/build.jpg)
+
 ## Hardware Requirements
 
 * ESP32 development board
