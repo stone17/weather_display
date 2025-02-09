@@ -5,13 +5,18 @@ import os
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
 import io
-import hashlib
 import matplotlib.pyplot as plt
-import matplotlib
 import matplotlib.dates as mdates
 import upload
 
-matplotlib.use('Agg')
+# Load settings from config.json
+with open("config.json", "r") as config_file:
+    config = json.load(config_file)
+
+API_KEY = config["api_key"]
+LAT = config["latitude"]
+LON = config["longitude"]
+SERVER_IP = config["server_ip"]
 
 def fetch_weather_data(api_key, lat, lon):
     """Fetches weather data from OpenWeatherMap API."""
@@ -249,10 +254,7 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
     return image
 
 def main():
-    api_key = "Add API KEY"   # !!  IMPORTANT:  REPLACE THIS !!
-    lat = 15.7047
-    lon = -13.1910
-    output_image_path = "weather_forecast_graph.png"  # New filename
+    output_image_path = "weather_forecast_graph.png"
     cache_file = "weather_data_cache_graph.json"
 
     try:
@@ -264,13 +266,13 @@ def main():
                 print("Using cached data.")
             else:
                 print("Cache expired, fetching new data.")
-                data = fetch_weather_data(api_key, lat, lon)
+                data = fetch_weather_data(API_KEY, LAT, LON)
                 if data:
                     with open(cache_file, 'w') as f:
                         json.dump(data, f)
         else:
             print("No cache found, fetching new data.")
-            data = fetch_weather_data(api_key, lat, lon)
+            data = fetch_weather_data(API_KEY, LAT, LON)
             if data:
                 with open(cache_file, 'w') as f:
                     json.dump(data, f)
@@ -288,14 +290,12 @@ def main():
 
     #Process the image 
     processed_data, width, height = upload.process_image(img)
-
-    if processed_data:
-        print("Uploading weather image")
-        upload_successful = upload.upload_processed_data(processed_data, width, height, upload.DEFAULT_ESP_IP, upload.DEFAULT_UPLOAD_URL)
-        if upload_successful:
-            print("Upload complete")
-        else:
-            print("Upload failed")
+    print("Uploading weather image")
+    upload_successful = upload.upload_processed_data(processed_data, width, height, SERVER_IP, upload.DEFAULT_UPLOAD_URL)
+    if upload_successful:
+        print("Upload complete")
+    else:
+        print("Upload failed")
 
 if __name__ == "__main__":
     main()

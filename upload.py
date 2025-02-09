@@ -9,9 +9,8 @@ from io import BytesIO
 import traceback
 
 # Configuration
-DEFAULT_ESP_IP = "192.168.0.18"  # Replace with your ESP32's IP address
-DEFAULT_UPLOAD_URL = "/"
-DEFAULT_IMAGE_PATH = "weather.png"  # Update with your image path
+DEFAULT_UPLOAD_URL = "/" #do not change
+DEFAULT_IMAGE_PATH = "weather.png"  # Update with your image path if run without create_weather_info.py
 CHUNK_SIZE = 1000
 TIMEOUT = 30
 RETRIES = 3
@@ -27,12 +26,18 @@ def main():
 
     args = parser.parse_args()
 
+    # Load SERVER_IP and UPLOAD_URL from config.json if provided, otherwise use defaults
+    with open("config.json", "r") as config_file:
+        config = json.load(config_file)
+    SERVER_IP = config.get("server_ip")
+
     # Process the image 
     img = Image.open(args.image_path)
     processed_data, width, height = process_image(img)
 
     if processed_data:
-        upload_successful = upload_processed_data(processed_data, width, height, args.esp_ip, args.upload_url)
+        # Use SERVER_IP and UPLOAD_URL loaded from config.json
+        upload_successful = upload_processed_data(processed_data, width, height, SERVER_IP, UPLOAD_URL)  
         if upload_successful:
             print("Upload complete")
         else:
