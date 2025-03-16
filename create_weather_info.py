@@ -200,13 +200,12 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
 
     # --- Current Details (NO ICONS FOR NOW) ---
     details = [
-      (f"Feel: {current['feels_like']:.1f}°C"),
+      (f"Feel  : {current['feels_like']:.1f}°C"),
       (f"Hum.: {current['humidity']}%"),
       (f"Wind: {current['wind_speed']:.1f} m/s"),
     ]
     for i, (text) in enumerate(details):
         draw.text((details_x, details_y + i * line_height), text, font=regular_font, fill=text_color)
-
 
     hourly_forecast = data['hourly'][:12]
     hourly_forecast_x = current_weather_width
@@ -214,7 +213,7 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
     create_12h_forecast_section(draw, hourly_forecast, hourly_forecast_x, 0, image_width - current_weather_width, hourly_forecast_height, font_path, 11)
 
     daily_start_x = 25
-    daily_start_y = 290  # Adjusted for more space below the graph
+    daily_start_y = 270  # Adjusted for more space below the graph
     daily_width = (image_width - 40) // 5
     #draw.text((daily_start_x, daily_start_y - 40), "5-Day Forecast", font=heading_font, fill=text_color)
 
@@ -231,7 +230,7 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
         if icon_path:
             try:
                 icon_img = Image.open(icon_path).resize((100, 100)).convert("RGBA")
-                image.paste(icon_img, (daily_x -3, daily_start_y + 15), mask=icon_img)  # Adjusted position
+                image.paste(icon_img, (daily_x -12, daily_start_y + 5), mask=icon_img)  # Adjusted position
             except Exception as e:
                 print(f"Error displaying daily icon for day {i}: {e}, path: {icon_path}")
                 draw.rectangle((daily_x, daily_start_y + 15, daily_x + 48, daily_start_y + 63), outline="black") # Adjusted size
@@ -241,13 +240,19 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
 
         high_temp = f"{day_data['temp']['max']:.0f}°C"
         low_temp = f"{day_data['temp']['min']:.0f}°C"
-        draw.text((daily_x, daily_start_y + 100), f"{high_temp} / {low_temp}", font=small_font, fill=text_color)
+        draw.text((daily_x, daily_start_y + 95), f"{high_temp} / {low_temp}", font=small_font, fill=text_color)
 
         rain_data = day_data.get('rain', 0)
         if rain_data is None:
             rain_data = 0.0
         rain = f"{rain_data:.1f} mm"
-        draw.text((daily_x+10, daily_start_y + 120), f"{rain}", font=small_font, fill=text_color)
+        draw.text((daily_x+10, daily_start_y + 115), f"{rain}", font=small_font, fill=text_color)
+
+        wind = day_data.get('wind_speed')
+        draw.text((daily_x+10, daily_start_y + 135), f"{wind:.1f} m/s", font=small_font, fill=text_color)
+
+        uvi = day_data.get('uvi')
+        draw.text((daily_x+10, daily_start_y + 155), f"UV {uvi:.1f}", font=small_font, fill=text_color)
 
     image.save(output_path)
     print(f"Weather image saved to {output_path}")
@@ -260,7 +265,7 @@ def main():
     try:
         if os.path.exists(cache_file):
             modified_time = os.path.getmtime(cache_file)
-            if datetime.now() - datetime.fromtimestamp(modified_time) < timedelta(minutes=5):
+            if datetime.now() - datetime.fromtimestamp(modified_time) < timedelta(minutes=60):
                 with open(cache_file, 'r') as f:
                     data = json.load(f)
                 print("Using cached data.")
@@ -289,13 +294,13 @@ def main():
     img = create_weather_image(data, output_image_path)
 
     #Process the image 
-    processed_data, width, height = upload.process_image(img)
+    #processed_data, width, height = upload.process_image(img)
     print("Uploading weather image")
-    upload_successful = upload.upload_processed_data(processed_data, width, height, SERVER_IP, upload.DEFAULT_UPLOAD_URL)
-    if upload_successful:
-        print("Upload complete")
-    else:
-        print("Upload failed")
+    #upload_successful = upload.upload_processed_data(processed_data, width, height, SERVER_IP, upload.DEFAULT_UPLOAD_URL)
+    #if upload_successful:
+    #    print("Upload complete")
+    #else:
+    #    print("Upload failed")
 
 if __name__ == "__main__":
     main()
