@@ -293,14 +293,14 @@ def main():
 
     img = create_weather_image(data, output_image_path)
 
-    #Process the image 
-    #processed_data, width, height = upload.process_image(img)
+    Process the image 
+    processed_data, width, height = upload.process_image(img)
     print("Uploading weather image")
-    #upload_successful = upload.upload_processed_data(processed_data, width, height, SERVER_IP, upload.DEFAULT_UPLOAD_URL)
-    #if upload_successful:
-    #    print("Upload complete")
-    #else:
-    #    print("Upload failed")
+    upload_successful = upload.upload_processed_data(processed_data, width, height, SERVER_IP, upload.DEFAULT_UPLOAD_URL)
+    if upload_successful:
+        print("Upload complete")
+    else:
+        print("Upload failed")
 
 if __name__ == "__main__":
     main()
