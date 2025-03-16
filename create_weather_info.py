@@ -137,12 +137,12 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
     image_height = 448
     image = Image.new("RGB", (image_width, image_height), "white")
     draw = ImageDraw.Draw(image)
-    if 0: #use for linux system
-        font_path="/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf" #"arial.ttf"
-        bold_font_path="/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf" #"arialbd.ttf"
-    else:
+    if os.name == 'nt': 
         font_path="arial.ttf"
         bold_font_path="arialbd.ttf"
+    else: #use for linux system
+        font_path="/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+        bold_font_path="/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 
     try:
         title_font = ImageFont.truetype(bold_font_path, 24)
