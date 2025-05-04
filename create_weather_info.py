@@ -1,6 +1,5 @@
 import requests
 import json
-import time
 import os
 from datetime import datetime, timedelta
 from PIL import Image, ImageDraw, ImageFont
@@ -8,10 +7,25 @@ import io
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import upload
+from IPy import IP
 
 # Load settings from config.json
-with open("config.json", "r") as config_file:
-    config = json.load(config_file)
+try:
+    with open("config.json", "r") as config_file:
+        config = json.load(config_file)
+except json.JSONDecodeError as e:
+    print(f"Error loading config.json: {e}")
+    print("Please check the syntax of your 'config.json' file.")
+    print("Ensure all keys and string values are enclosed in double quotes (\") and commas are used correctly.")
+    # Example of correct format:
+    # {
+    #   "api_key": "YOUR_API_KEY",
+    #   "latitude": 51.5074,
+    #   "longitude": -0.1278,
+    #   "server_ip": "192.168.1.100"
+    # }
+    exit(1) # Exit if config cannot be loaded
+
 
 API_KEY = config["api_key"]
 LAT = config["latitude"]
@@ -55,8 +69,8 @@ def download_and_cache_icon(icon_code, icon_cache_dir="icon_cache"):
         print(f"Error saving icon {icon_code}: {e}")
         return None
 
-def create_12h_forecast_section(draw, hourly_forecast, x, y, width, height, font_path, font_size):
-    """Creates the 12-hour forecast section (graph) on the image."""
+def create_24h_forecast_section(draw, hourly_forecast, x, y, width, height, font_path, font_size):
+    """Creates the 24-hour forecast section (graph) on the image."""
 
     font = ImageFont.truetype(font_path, font_size)
     title_font = ImageFont.truetype(font_path, font_size + 4)
@@ -110,8 +124,8 @@ def create_12h_forecast_section(draw, hourly_forecast, x, y, width, height, font
     # --- X-Axis Formatting (Every 3 Hours, starting at next full hour) ---
     first_time = times[0]
     next_hour = (first_time + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
-    ax1.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0, 24, 3)))  # Every 3 hours
-    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H:%M'))
+    ax1.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0, 24, 4)))  # Every 3 hours
+    ax1.xaxis.set_major_formatter(mdates.DateFormatter('%H'))
     ax1.set_xlim(left=next_hour) # Start at the *next* full hour
     plt.xticks(rotation=45, ha="right")  # Rotate labels for readability
     # --- ADDED GRIDLINES ---
@@ -137,7 +151,7 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
     image_height = 448
     image = Image.new("RGB", (image_width, image_height), "white")
     draw = ImageDraw.Draw(image)
-    if os.name == 'nt': 
+    if os.name == 'nt':
         font_path="arial.ttf"
         bold_font_path="arialbd.ttf"
     else: #use for linux system
@@ -207,14 +221,24 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
     for i, (text) in enumerate(details):
         draw.text((details_x, details_y + i * line_height), text, font=regular_font, fill=text_color)
 
-    hourly_forecast = data['hourly'][:12]
+    # Changed slice from [:12] to [:24]
+    hourly_forecast = data['hourly'][:24]
     hourly_forecast_x = current_weather_width
+    hourly_forecast_y = 0
     hourly_forecast_height = 260
-    create_12h_forecast_section(draw, hourly_forecast, hourly_forecast_x, 0, image_width - current_weather_width, hourly_forecast_height, font_path, 11)
+    hourly_forecast_width = image_width - current_weather_width + 20
+
+    create_24h_forecast_section(
+        draw,
+        hourly_forecast,
+        hourly_forecast_x, hourly_forecast_y,
+        hourly_forecast_width, hourly_forecast_height,
+        font_path, 11
+    )
 
     daily_start_x = 25
     daily_start_y = 270  # Adjusted for more space below the graph
-    daily_width = (image_width - 40) // 5
+    daily_width = (image_width - 0) // 5
     #draw.text((daily_start_x, daily_start_y - 40), "5-Day Forecast", font=heading_font, fill=text_color)
 
     daily = data['daily'][:5]
@@ -246,13 +270,13 @@ def create_weather_image(data, output_path, font_path="arial.ttf"):
         if rain_data is None:
             rain_data = 0.0
         rain = f"{rain_data:.1f} mm"
-        draw.text((daily_x+10, daily_start_y + 115), f"{rain}", font=small_font, fill=text_color)
+        draw.text((daily_x+10, daily_start_y + 115), f"{rain}", font=small_font, fill=(0, 0, 200))
 
         wind = day_data.get('wind_speed')
-        draw.text((daily_x+10, daily_start_y + 135), f"{wind:.1f} m/s", font=small_font, fill=text_color)
+        draw.text((daily_x+10, daily_start_y + 135), f"{wind:.1f} m/s", font=small_font, fill=(0, 180, 0))
 
         uvi = day_data.get('uvi')
-        draw.text((daily_x+10, daily_start_y + 155), f"UV {uvi:.1f}", font=small_font, fill=text_color)
+        draw.text((daily_x+10, daily_start_y + 155), f"UV {uvi:.1f}", font=small_font, fill=(255, 140, 0))
 
     image.save(output_path)
     print(f"Weather image saved to {output_path}")
@@ -283,7 +307,8 @@ def main():
                     json.dump(data, f)
     except Exception as e:
         print(f"Error with cache: {e}. Fetching new data.")
-        data = fetch_weather_data(api_key, lat, lon)
+        # Corrected variable names here
+        data = fetch_weather_data(API_KEY, LAT, LON)
         if data:
             try:
                 with open(cache_file, 'w') as f:
@@ -293,14 +318,21 @@ def main():
 
     img = create_weather_image(data, output_image_path)
 
-    #Process the image 
     processed_data, width, height = upload.process_image(img)
+    try:
+        IP(SERVER_IP)
+        ip_valid = True
+    except ValueError:
+        ip_valid = False
+        print("No valid ip address found in config.json ({:s})!".format(SERVER_IP))
+
     print("Uploading weather image")
-    upload_successful = upload.upload_processed_data(processed_data, width, height, SERVER_IP, upload.DEFAULT_UPLOAD_URL)
-    if upload_successful:
-        print("Upload complete")
-    else:
-        print("Upload failed")
+    if ip_valid:
+        upload_successful = upload.upload_processed_data(processed_data, width, height, SERVER_IP, upload.DEFAULT_UPLOAD_URL)
+        if upload_successful:
+            print("Upload complete")
+        else:
+            print("Upload failed")
 
 if __name__ == "__main__":
     main()
