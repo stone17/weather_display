@@ -1,12 +1,14 @@
 # ESP32 Weather Display with Waveshare 5.65-inch e-Paper
 
-This project displays weather information on a Waveshare 5.65-inch e-Paper display connected to an ESP32. It fetches weather data from OpenWeatherMap, generates an image with a 12-hour forecast graph, and uploads it to the ESP32 for display.
+This project displays weather information on a Waveshare 5.65-inch e-Paper display connected to an ESP32. It fetches weather data from various providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather), generates an image with the forecast, and uploads it to the ESP32 for display.
 
 ## Features
 
 * Displays current weather conditions (temperature, icon, description).
-* Shows a detailed 12-hour forecast graph (temperature, wind, rain).
-* Provides a 5-day forecast summary (icons, high/low temperatures, rain).
+* Shows a detailed 24-hour forecast graph (temperature, wind, rain).
+* Provides a 5-day forecast summary (icons, high/low temperatures, rain, wind, UV).
+* Supports multiple weather data providers (OWM, Open-Meteo, Meteomatics, Google) via configuration.
+* Selectable icon source (OWM or Google) independent of the data provider.
 * Caches weather data to reduce API calls.
 * Optimized for 7-color e-Paper displays.
 
@@ -22,11 +24,12 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 
 ## Software Requirements
 
-* Python 3.6 or higher
+* Python 3.7 or higher (due to newer library features like `datetime.fromisoformat`)
 * Required Python packages (install with `pip install -r requirements.txt`):
     * requests
     * Pillow (PIL)
     * matplotlib
+    * IPy
 
 ## Resources
 
@@ -35,26 +38,61 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 
 ## Setup
 
-1. **Configure ESP32:**
-   * Follow the instructions in the Waveshare e-Paper Wiki to set up the display with your ESP32. You'll need to install the ESP32 Arduino core and the e-Paper driver library.
-   * Flash the ino file in the "Loader_esp32wf" of the linked fw above. Update wifi details in the srvr.h file. This creates a web interface on the ESP32 that allows uploading images.
-2. **Configure Python Script:**
-   * Obtain an API key from OpenWeatherMap.
-   * Create a `config.json` file (see example above) and fill in your API key, latitude, longitude, ESP32 IP address, and upload URL.
-3. **Run the Script:**
-   * Execute `create_weather_info.py`. This will fetch weather data, create the image, and upload it to your ESP32.
+1.  **Configure ESP32:**
+    *   Follow the instructions in the Waveshare e-Paper Wiki to set up the display with your ESP32. You'll need to install the ESP32 Arduino core and the e-Paper driver library.
+    *   Flash the `.ino` file found in the `Loader_esp32wf` directory of the linked Waveshare firmware above. **Important:** Update your WiFi details in the `srvr.h` file before flashing. This creates a web interface on the ESP32 that allows uploading images. Note the IP address assigned to your ESP32.
+2.  **Configure Python Script:**
+    *   **Obtain Credentials:** Get the necessary API keys or credentials for the weather data provider(s) you intend to use:
+        *   **OpenWeatherMap:** API Key for One Call API 3.0.
+        *   **Open-Meteo:** No key required.
+        *   **Meteomatics:** Username and Password.
+        *   **Google Weather:** Google Cloud Platform API Key with Weather API enabled (Note: This is a paid service).
+    *   **Create `config.json`:** Create a file named `config.json` in the same directory as the Python scripts. Use the example below and fill in your details:
+
+        ```json
+        {
+           "latitude": YOUR_LATITUDE,
+           "longitude": YOUR_LONGITUDE,
+           "server_ip": "YOUR_ESP32_IP_ADDRESS",
+           "weather_provider": "google",
+           "icon_provider": "openweathermap",
+           "provider_comment" : ["open-meteo", "openweathermap", "meteomatics", "google"],
+           "google_api_key": "YOUR_GOOGLE_MAPS_API_KEY",
+           "openweathermap_api_key": "YOUR_OPENWEATHERMAP_API_KEY",
+           "meteomatics_username": "YOUR_METEOMATICS_USERNAME",
+           "meteomatics_password": "YOUR_METEOMATICS_PASSWORD"
+        }
+        ```
+    *   **Configuration Details:**
+        *   `latitude`, `longitude`: Your location.
+        *   `server_ip`: The IP address of your ESP32 running the web server firmware. Leave empty (`""`) if not uploading.
+        *   `weather_provider`: Choose the source for weather data: `"openweathermap"`, `"open-meteo"`, `"meteomatics"`, or `"google"`.
+        *   `icon_provider`: Choose the source for icons: `"openweathermap"` (uses OWM-style icons, recommended for e-ink contrast) or `"google"` (uses Google icons if available in the data).
+        *   Fill in the corresponding API key/credentials for your chosen `weather_provider`. Keys for unused providers can be left blank or as placeholders.
+3.  **Install Requirements:**
+    *   Open a terminal or command prompt in the project directory.
+    *   Run: `pip install -r requirements.txt`
+4.  **Run the Script:**
+    *   Execute `python create_weather_info.py`. This will fetch weather data (using cache if available), create the `weather_forecast_graph.png` image, and attempt to upload it to your ESP32 if `server_ip` is configured.
 
 ## Customization
 
-* **Font:** Change the `font_path` variable in `create_weather_info.py` to use a different font.
-* **Colors:** Modify the color values in `create_weather_info.py` to customize the display's appearance.
-* **Display:** Adjust the code in `upload.py` to support different e-Paper display models.
+*   **Providers:** Select your preferred `weather_provider` and `icon_provider` in `config.json`.
+*   **Font:** Change the `font_path` variables in `create_weather_info.py` to use different TrueType fonts.
+*   **Colors:** Modify the color value tuples (RGB) in `create_weather_info.py` to customize the display's appearance.
+*   **Display:** Adjust the image processing and upload code in `upload.py` to support different e-Paper display models or upload methods.
 
 ## Troubleshooting
 
-* **Display Issues:** Double-check the wiring and ESP32 configuration.
-* **Network Errors:** Ensure your ESP32 is connected to the network and the IP address in `config.json` is correct.
-* **API Errors:** Verify your OpenWeatherMap API key and check for any error messages in the script output.
+*   **Display Issues:** Double-check the wiring between the ESP32 and the e-Paper display. Ensure the correct Waveshare firmware is flashed and running.
+*   **Network Errors:** Verify your ESP32 is connected to your WiFi network. Confirm the `server_ip` in `config.json` matches the ESP32's actual IP address. Check firewall settings if applicable.
+*   **API Errors:**
+    *   Verify the API key/credentials in `config.json` for your selected `weather_provider` are correct and active.
+    *   Check the script output for specific error messages from the provider (e.g., 401 Unauthorized, 403 Forbidden, 429 Rate Limit).
+    *   Consult the documentation for your chosen weather provider regarding API limits and potential costs (especially Google Weather).
+    *   Check the status page of the weather provider if errors persist.
+*   **Icon Issues:** Ensure the `icon_provider` setting is correct. If icons are missing, check the script output for warnings about unmapped conditions or download errors. Clear the `icon_cache` directory if you suspect corrupted icons.
+*   **`AttributeError: 'FreeTypeFont' object has no attribute 'getsize'`:** You are likely using Pillow 10.0.0 or newer. Ensure `create_weather_info.py` uses `font.getlength(text)` instead of `font.getsize(text)[0]` for calculating text width.
 
 ## Contributing
 
@@ -62,4 +100,4 @@ Contributions are welcome! Feel free to submit pull requests for bug fixes, new 
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the LICENSE file for details.

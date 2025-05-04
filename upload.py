@@ -1,3 +1,4 @@
+# upload.py
 import requests
 import time
 import argparse
@@ -7,43 +8,16 @@ import os
 from PIL import Image
 from io import BytesIO
 import traceback
+import json
 
 # Configuration
 DEFAULT_UPLOAD_URL = "/" #do not change
-DEFAULT_IMAGE_PATH = "weather.png"  # Update with your image path if run without create_weather_info.py
+DEFAULT_IMAGE_PATH = "weather.png"
 CHUNK_SIZE = 1000
 TIMEOUT = 30
 RETRIES = 3
 
-def main():
-    # Logging setup
-    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-    logger = logging.getLogger(__name__)
-    parser = argparse.ArgumentParser(description="Upload processed image data to ESP32.")
-    parser.add_argument("--image", dest="image_path", default=DEFAULT_IMAGE_PATH, help="Path to the image file")
-
-    args = parser.parse_args()
-
-    # Load SERVER_IP and UPLOAD_URL from config.json if provided, otherwise use defaults
-    with open("config.json", "r") as config_file:
-        config = json.load(config_file)
-    SERVER_IP = config.get("server_ip")
-
-    # Process the image 
-    img = Image.open(args.image_path)
-    processed_data, width, height = process_image(img)
-
-    if processed_data:
-        # Use SERVER_IP and UPLOAD_URL loaded from config.json
-        upload_successful = upload_processed_data(processed_data, width, height, SERVER_IP, UPLOAD_URL)  
-        if upload_successful:
-            print("Upload complete")
-        else:
-            print("Upload failed")
-    else:
-        print("Image processing failed.")
-        logger.error(traceback.format_exc())
-
+# --- Keep process_image, upload_processed_data, send_chunk as they are ---
 def process_image(img):
     # Resize the image to 600x448
     img = img.resize((600, 448))
@@ -77,6 +51,7 @@ def process_image(img):
     return img_data, width, height
 
 def upload_processed_data(data, width, height, esp_ip, upload_url):
+    # --- This function remains the same ---
     try:
         url_prefix = f"http://{esp_ip}{upload_url}"
         epd_command = "EPDz_"  # Hardcoded command for the 5.65-inch display
@@ -115,10 +90,10 @@ def upload_processed_data(data, width, height, esp_ip, upload_url):
         # Loop through the data in chunks
         while px_ind < len(data):
             #logger.debug(f"Sending chunk: px_ind={px_ind}, st_ind={st_ind}")
-            
+
             # Determine if this is the last chunk based on remaining data
             is_last_chunk = px_ind + CHUNK_SIZE >= len(data)
-            
+
             st_ind, px_ind = send_chunk(session, url_prefix, data, px_ind, st_ind, is_last_chunk)
             chunk_counter += 1  # Increment the counter after each chunk
 
@@ -135,8 +110,11 @@ def upload_processed_data(data, width, height, esp_ip, upload_url):
         #logger.error(traceback.format_exc())
         return False
     except Exception as e:
-        logger.exception("An unexpected error occurred:")
+        # Use basic print for exceptions if logger not configured
+        print(f"An unexpected error occurred: {e}")
+        traceback.print_exc()
         return False
+
 
 def send_chunk(session, url_prefix, chunk_data, px_ind, st_ind, is_last_chunk=False):
     msg = ""
@@ -189,6 +167,61 @@ def send_chunk(session, url_prefix, chunk_data, px_ind, st_ind, is_last_chunk=Fa
     if px_ind >= len(chunk_data):
         st_ind += 1
     return st_ind, px_ind
+
+
+def main():
+    # Logging setup (optional, can use basic print)
+    # logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+    # logger = logging.getLogger(__name__)
+    parser = argparse.ArgumentParser(description="Upload processed image data to ESP32.")
+    parser.add_argument("--image", dest="image_path", default=DEFAULT_IMAGE_PATH, help="Path to the image file")
+    # Add argument for server IP if needed when run standalone
+    parser.add_argument("--ip", dest="server_ip", default=None, help="IP address of the ESP32 server")
+
+
+    args = parser.parse_args()
+
+    # Load SERVER_IP from config.json if --ip not provided
+    server_ip = args.server_ip
+    if not server_ip:
+        try:
+            with open("config.json", "r") as config_file:
+                config = json.load(config_file)
+            server_ip = config.get("server_ip")
+        except (FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"Warning: Could not load server_ip from config.json: {e}")
+
+    if not server_ip:
+        print("Error: Server IP address not provided via --ip argument or found in config.json.")
+        sys.exit(1)
+
+    # Check if image file exists
+    if not os.path.exists(args.image_path):
+        print(f"Error: Image file not found at {args.image_path}")
+        sys.exit(1)
+
+    # Process the image
+    try:
+        print(f"Processing image: {args.image_path}")
+        img = Image.open(args.image_path)
+        processed_data, width, height = process_image(img)
+    except Exception as e:
+        print(f"Error processing image: {e}")
+        traceback.print_exc()
+        sys.exit(1)
+
+
+    if processed_data:
+        print(f"Uploading image to {server_ip}...")
+        # Use DEFAULT_UPLOAD_URL here
+        upload_successful = upload_processed_data(processed_data, width, height, server_ip, DEFAULT_UPLOAD_URL)
+        if upload_successful:
+            print("Upload complete")
+        else:
+            print("Upload failed")
+    else:
+        print("Image processing failed (returned no data).")
+        # logger.error(traceback.format_exc()) # Use print if logger not set up
 
 if __name__ == "__main__":
     main()
