@@ -4,7 +4,7 @@
   "server_ip": "YOUR_ESP_SERVER_ADDRESS",
   "weather_provider": "google",
   "icon_provider": "openweathermap",
-  "provider_comment" : ["open-meteo", "openweathermap", "meteomatics", "google"],
+  "provider_comment" : ["open-meteo", "openweathermap", "meteomatics", "google", "smhi"],
   "google_api_key": "YOUR_GOOGLE_MAPS_API_KEY",
   "openweathermap_api_key": "YOUR_OPENWEATHERMAP_API_KEY",
   "meteomatics_username": "YOUR_METEOMATICS_USERNAME",

@@ -19,6 +19,7 @@ except ImportError:
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from IPy import IP
+import asyncio
 
 # Local application imports
 import upload
@@ -445,7 +446,7 @@ def create_weather_image(current_data, hourly_data, daily_data, output_path, ico
 
 
 # --- Main Execution ---
-def main():
+async def main():
     output_image_path = "weather_forecast_graph.png"
 
     # --- Load Config ---
@@ -471,7 +472,7 @@ def main():
         exit(1)
 
     # --- Fetch Data (uses internal caching) ---
-    if not provider.fetch_data():
+    if not await provider.fetch_data():
         if not provider.get_all_data():
             print("Failed to fetch weather data and no valid cache available. Exiting.")
             exit(1)
@@ -522,4 +523,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

@@ -8,11 +8,55 @@ from requests.auth import HTTPBasicAuth
 from collections import defaultdict
 import math
 import traceback # For detailed error logging
-import hashlib # For icon cache filename generation
+import asyncio # For async operations
+import aiohttp # For async HTTP client
 
 # --- Constants ---
 CACHE_DURATION_MINUTES = 60
 CACHE_FILE = "weather_data_cache_provider.json" # Use a dedicated cache file
+
+# --- SMHI SYMBOL Mappings ---
+# Source: https://www.smhi.se/kunskapsbanken/meteorologi/vadersymboler/
+SMHI_SYMBOL_TO_OWM_ICON = {
+    1: '01d',  # Clear sky
+    2: '02d',  # Nearly clear sky
+    3: '03d',  # Variable cloudiness
+    4: '04d',  # Half clear sky
+    5: '04d',  # Cloudy sky
+    6: '04d',  # Overcast sky
+    7: '50d',  # Fog
+    8: '09d',  # Light rain showers
+    9: '09d',  # Moderate rain showers
+    10: '09d', # Heavy rain showers
+    11: '11d', # Thunderstorm
+    12: '13d', # Light sleet showers
+    13: '13d', # Moderate sleet showers
+    14: '13d', # Heavy sleet showers
+    15: '13d', # Light snow showers
+    16: '13d', # Moderate snow showers
+    17: '13d', # Heavy snow showers
+    18: '10d', # Light rain
+    19: '10d', # Moderate rain
+    20: '10d', # Heavy rain
+    21: '11d', # Thunder
+    22: '13d', # Light sleet
+    23: '13d', # Moderate sleet
+    24: '13d', # Heavy sleet
+    25: '13d', # Light snow
+    26: '13d', # Moderate snow
+    27: '13d', # Heavy snow
+    # Note: SMHI symbols don't inherently distinguish day/night. Using 'd' suffix.
+}
+SMHI_SYMBOL_DESC = {
+    1: 'Clear sky', 2: 'Nearly clear', 3: 'Variable cloudiness', 4: 'Half clear',
+    5: 'Cloudy', 6: 'Overcast', 7: 'Fog', 8: 'Light rain showers',
+    9: 'Mod rain showers', 10: 'Heavy rain showers', 11: 'Thunderstorm',
+    12: 'Light sleet showers', 13: 'Mod sleet showers', 14: 'Heavy sleet showers',
+    15: 'Light snow showers', 16: 'Mod snow showers', 17: 'Heavy snow showers',
+    18: 'Light rain', 19: 'Mod rain', 20: 'Heavy rain', 21: 'Thunder',
+    22: 'Light sleet', 23: 'Mod sleet', 24: 'Heavy sleet', 25: 'Light snow',
+    26: 'Mod snow', 27: 'Heavy snow',
+}
 
 # --- Meteomatics SYMBOL Mappings ---
 METEOMATICS_TO_OWM_ICON = {
@@ -112,6 +156,11 @@ def get_google_code_description(code):
     """Returns a text description for a Google condition code."""
     return GOOGLE_CONDITION_DESC.get(code, 'Unknown')
 
+def get_owm_icon_from_smhi_code(code):
+    """Returns an OWM icon code string from an SMHI symbol code."""
+    # SMHI symbols don't have day/night distinction, use 'd' suffix
+    return SMHI_SYMBOL_TO_OWM_ICON.get(code, 'na')
+
 def parse_iso_time(iso_time_str):
     """Parses ISO time string (UTC assumed if no offset) to Unix timestamp."""
     if not iso_time_str:
@@ -151,6 +200,125 @@ def parse_google_date(date_obj):
         return 0
 
 # --- Transformation Functions ---
+def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
+    """Transforms pysmhi daily and hourly data to OWM OneCall 3.0 structure."""
+    if not smhi_daily and not smhi_hourly:
+        print("Error: No data received from SMHI.")
+        return None
+
+    transformed_data = {
+        'lat': lat, 'lon': lon, 'timezone': 'UTC', 'timezone_offset': 0,
+        'current': {}, 'hourly': [], 'daily': []
+    }
+
+    # Process Hourly
+    if smhi_hourly:
+        for hour_fc in smhi_hourly:
+            # pysmhi returns SMHIForecast objects, convert to dict
+            hour_dict = hour_fc.__dict__ if hasattr(hour_fc, '__dict__') else hour_fc
+
+            ts = int(hour_dict.get('valid_time', datetime.now(timezone.utc)).timestamp())
+            temp = hour_dict.get('temperature', 0.0)
+            humidity = hour_dict.get('humidity', 50)
+            pressure = hour_dict.get('pressure', 1013.0)
+            wind_speed = hour_dict.get('wind_speed', 0.0)
+            wind_deg = hour_dict.get('wind_direction', 0)
+            wind_gust = hour_dict.get('wind_gust', 0.0)
+            total_cloud = hour_dict.get('total_cloud', 50)
+            symbol = hour_dict.get('symbol', 0)
+            mean_precipitation = hour_dict.get('mean_precipitation', 0.0)
+            thunder = hour_dict.get('thunder', 0)
+            visibility = hour_dict.get('visibility', 10.0) * 1000 # Convert km to meters
+
+            # SMHI doesn't provide feels_like, dew_point, uvi, sunrise/sunset, pop directly per hour
+            # Infer description and icon from symbol
+            description = SMHI_SYMBOL_DESC.get(symbol, 'Unknown')
+            owm_icon = get_owm_icon_from_smhi_code(symbol)
+
+            # Add thunder to description if present
+            if thunder > 0 and 'Thunder' not in description:
+                 description += " (Thunder)"
+
+            hour_entry = {
+                'dt': ts, 'temp': temp, 'feels_like': temp, # Use temp as feels_like fallback
+                'pressure': pressure, 'humidity': humidity, 'dew_point': 0, # Placeholder
+                'uvi': 0, # Placeholder
+                'clouds': total_cloud, 'visibility': visibility,
+                'wind_speed': wind_speed, 'wind_deg': wind_deg, 'wind_gust': wind_gust,
+                'weather': [{
+                    'id': symbol, 'main': description.split()[0], # Use first word for main
+                    'description': description, 'icon': owm_icon
+                }],
+                'rain': {'1h': mean_precipitation},
+                'pop': 0 # Placeholder
+            }
+            transformed_data['hourly'].append(hour_entry)
+
+    # Process Daily
+    if smhi_daily:
+        for day_fc in smhi_daily:
+            # pysmhi returns SMHIForecast objects, convert to dict
+            day_dict = day_fc.__dict__ if hasattr(day_fc, '__dict__') else day_fc
+
+            day_ts = int(day_dict.get('valid_time', datetime.now(timezone.utc)).timestamp())
+            temp_max = day_dict.get('temperature_max', day_dict.get('temperature', 0.0))
+            temp_min = day_dict.get('temperature_min', day_dict.get('temperature', 0.0))
+            total_precipitation = day_dict.get('total_precipitation', 0.0)
+            symbol = day_dict.get('symbol', 0)
+            wind_speed = day_dict.get('wind_speed', 0.0) # SMHI daily seems to give a single wind speed
+            wind_gust = day_dict.get('wind_gust', 0.0)
+            thunder = day_dict.get('thunder', 0)
+
+            description = SMHI_SYMBOL_DESC.get(symbol, 'Unknown')
+            owm_icon = get_owm_icon_from_smhi_code(symbol)
+            if thunder > 0 and 'Thunder' not in description:
+                 description += " (Thunder)"
+
+            day_entry = {
+                'dt': day_ts, 'sunrise': 0, 'sunset': 0, 'moonrise': 0, 'moonset': 0, 'moon_phase': 0, # Placeholders
+                'summary': description,
+                'temp': {'day': (temp_max + temp_min) / 2, 'min': temp_min, 'max': temp_max, 'night': temp_min, 'eve': temp_min, 'morn': temp_min}, # Approximate
+                'feels_like': {'day': (temp_max + temp_min) / 2, 'night': temp_min, 'eve': temp_min, 'morn': temp_min}, # Approximate
+                'pressure': day_dict.get('pressure', 1013.0), 'humidity': day_dict.get('humidity', 50), 'dew_point': 0, # Placeholder
+                'wind_speed': wind_speed, 'wind_deg': day_dict.get('wind_direction', 0), 'wind_gust': wind_gust,
+                'weather': [{'id': symbol, 'main': description.split()[0], 'description': description, 'icon': owm_icon}],
+                'clouds': day_dict.get('total_cloud', 50), 'pop': 0, 'rain': total_precipitation, 'uvi': 0 # Placeholders
+            }
+            transformed_data['daily'].append(day_entry)
+
+    # Update current from the first hourly entry if available
+    if transformed_data['hourly']:
+        transformed_data['current'] = transformed_data['hourly'][0].copy()
+        # SMHI hourly doesn't have sunrise/sunset, copy from daily if available
+        if transformed_data['daily']:
+             transformed_data['current']['sunrise'] = transformed_data['daily'][0].get('sunrise', 0)
+             transformed_data['current']['sunset'] = transformed_data['daily'][0].get('sunset', 0)
+    elif transformed_data['daily']:
+         # Fallback: Create a minimal current from the first daily entry
+         first_daily = transformed_data['daily'][0]
+         transformed_data['current'] = {
+             'dt': first_daily['dt'],
+             'temp': first_daily['temp']['day'],
+             'feels_like': first_daily['feels_like']['day'],
+             'pressure': first_daily['pressure'],
+             'humidity': first_daily['humidity'],
+             'uvi': first_daily['uvi'],
+             'wind_speed': first_daily['wind_speed'],
+             'wind_deg': first_daily['wind_deg'],
+             'wind_gust': first_daily['wind_gust'],
+             'weather': first_daily['weather'],
+             'rain': {'1h': 0}, # No hourly rain in daily data
+             'pop': first_daily['pop'],
+             'sunrise': first_daily['sunrise'],
+             'sunset': first_daily['sunset']
+         }
+
+    # Final check
+    if not transformed_data['current']: print("ERROR: Transformation resulted in empty 'current' data.")
+    if not transformed_data['hourly']: print("Warning: Transformation resulted in empty 'hourly' data.")
+    if not transformed_data['daily']: print("Warning: Transformation resulted in empty 'daily' data.")
+
+    return transformed_data
 
 def transform_meteomatics_data(meteomatics_json, lat, lon):
     """Transforms Meteomatics API response (basic plan 10 params) to OWM OneCall 3.0 structure."""
@@ -738,6 +906,7 @@ class WeatherProvider(ABC):
         self.cache_file = cache_file
         self.cache_duration = timedelta(minutes=cache_duration)
         self._data = None
+        self.provider_name = "UnknownProvider" # Default, should be overridden
 
     def _is_cache_valid(self):
         """Checks if the cache file exists and is recent."""
@@ -759,51 +928,55 @@ class WeatherProvider(ABC):
             # Basic validation
             if isinstance(data, dict) and 'current' in data and 'hourly' in data and 'daily' in data:
                  self._data = data
-                 print("Using cached weather data.")
+                 print(f"Using cached weather data for {self.provider_name}.")
                  return True
             else:
-                print("Cached data format invalid.")
+                print(f"Cached data format invalid for {self.provider_name}.")
                 return False
         except (json.JSONDecodeError, OSError, Exception) as e:
-            print(f"Error loading or validating cache file {self.cache_file}: {e}")
+            print(f"Error loading or validating cache file {self.cache_file} for {self.provider_name}: {e}")
             return False
 
-    def _save_to_cache(self):
+    def _save_to_cache(self, data_to_save):
         """Saves the current data to the cache file."""
-        if self._data:
+        if data_to_save:
             try:
                 with open(self.cache_file, 'w') as f:
-                    json.dump(self._data, f, indent=4)
-                print(f"Weather data saved to cache: {self.cache_file}")
+                    json.dump(data_to_save, f, indent=4)
+                print(f"Weather data for {self.provider_name} saved to cache: {self.cache_file}")
             except (OSError, TypeError) as e:
-                print(f"Error saving data to cache {self.cache_file}: {e}")
+                print(f"Error saving data to cache {self.cache_file} for {self.provider_name}: {e}")
         else:
-            print("No data to save to cache.")
+            print(f"No data to save to cache for {self.provider_name}.")
 
     @abstractmethod
-    def _fetch_from_api(self):
+    async def _fetch_from_api(self):
         """Abstract method to fetch data from the specific API and return structured data."""
         pass
 
-    def fetch_data(self):
+    async def fetch_data(self):
         """Fetches data, using cache if valid, otherwise calls API."""
         if self._is_cache_valid():
             if self._load_from_cache():
                 return True # Data loaded from cache
+        
+        print(f"Fetching new weather data from API for {self.provider_name}...")
+        fetched_api_data = await self._fetch_from_api() # Call the subclass implementation
 
-        print("Fetching new weather data from API...")
-        self._data = self._fetch_from_api() # Call the subclass implementation
-
-        if self._data:
-            self._save_to_cache()
+        if fetched_api_data:
+            self._data = fetched_api_data # Store the successfully fetched data
+            self._save_to_cache(self._data)
             return True
         else:
-            print("Failed to fetch new data from API.")
+            print(f"Failed to fetch new data from API for {self.provider_name}.")
             # Attempt to load old cache as fallback if fetching failed
             if os.path.exists(self.cache_file):
-                print("Attempting to use potentially outdated cache as fallback.")
-                self._load_from_cache() # Try loading again, ignore return value
-            return False # Indicate fetch failure even if fallback loaded
+                print(f"Attempting to use potentially outdated cache as fallback for {self.provider_name}.")
+                if self._load_from_cache():
+                     return True # Fallback loaded
+                else:
+                     return False # Fallback failed too
+            return False # Indicate fetch failure
 
     def get_current_data(self):
         """Returns the 'current' weather data dictionary."""
@@ -832,7 +1005,7 @@ class OpenWeatherMapProvider(WeatherProvider):
         if not api_key:
             raise ValueError("OpenWeatherMap API key is required.")
 
-    def _fetch_from_api(self):
+    async def _fetch_from_api(self):
         """Fetches data from OpenWeatherMap OneCall API."""
         print(f"Fetching data from {self.provider_name}...")
         url = (
@@ -841,19 +1014,28 @@ class OpenWeatherMapProvider(WeatherProvider):
             f"&units=metric&exclude=minutely,alerts"
         )
         response = None
-        try:
-            response = requests.get(url, timeout=30)
-            response.raise_for_status()
-            print(f"{self.provider_name} data fetched successfully.")
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching {self.provider_name} data: {e}")
-            if response is not None:
-                print(f"Response Body: {response.text}")
-            return None
-        except (KeyError, ValueError, json.JSONDecodeError) as e:
-            print(f"Error parsing {self.provider_name} data: {e}")
-            return None
+        # Use aiohttp for async fetch
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(url, timeout=30) as response:
+                    response.raise_for_status()
+                    print(f"{self.provider_name} data fetched successfully.")
+                    return await response.json()
+            except aiohttp.ClientError as e:
+                print(f"Error fetching {self.provider_name} data: {e}")
+                if response is not None:
+                    try:
+                        print(f"Response Body: {await response.text()}")
+                    except Exception:
+                        print("Could not read response body.")
+                return None
+            except (KeyError, ValueError, json.JSONDecodeError) as e:
+                print(f"Error parsing {self.provider_name} data: {e}")
+                return None
+            except Exception as e:
+                 print(f"An unexpected error occurred during {self.provider_name} fetch: {e}")
+                 traceback.print_exc()
+                 return None
 
 
 # --- Meteomatics Subclass ---
@@ -867,7 +1049,7 @@ class MeteomaticsProvider(WeatherProvider):
         if not username or not password:
             raise ValueError("Meteomatics username and password are required.")
 
-    def _fetch_from_api(self):
+    async def _fetch_from_api(self):
         """Fetches data from Meteomatics API (basic plan 10 params) and transforms it."""
         print(f"Fetching data from {self.provider_name} (basic plan 10 params)...")
         base_url = "https://api.meteomatics.com"
@@ -888,37 +1070,39 @@ class MeteomaticsProvider(WeatherProvider):
         )
         print(f"Requesting URL: {api_url}")
         response = None
-        try:
-            response = requests.get(
-                api_url,
-                auth=HTTPBasicAuth(self.username, self.password),
-                timeout=45
-            )
-            print(f"Meteomatics Response Status Code: {response.status_code}")
-            response.raise_for_status()
-            raw_data = response.json()
-            print(f"{self.provider_name} raw data fetched successfully.")
+        # Use aiohttp for async fetch
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(
+                    api_url,
+                    auth=aiohttp.BasicAuth(self.username, self.password),
+                    timeout=45
+                ) as response:
+                    print(f"Meteomatics Response Status Code: {response.status}")
+                    response.raise_for_status()
+                    raw_data = await response.json()
+                    print(f"{self.provider_name} raw data fetched successfully.")
 
-            transformed_data = transform_meteomatics_data(raw_data, self.lat, self.lon)
-            if transformed_data:
-                print("Meteomatics data transformed successfully.")
-                return transformed_data
-            else:
-                print("Meteomatics data transformation failed.")
+                    transformed_data = transform_meteomatics_data(raw_data, self.lat, self.lon)
+                    if transformed_data:
+                        print("Meteomatics data transformed successfully.")
+                        return transformed_data
+                    else:
+                        print("Meteomatics data transformation failed.")
+                        return None
+            except aiohttp.ClientError as e:
+                print(f"Error fetching {self.provider_name} data: {e}")
+                response_text = await response.text() if response is not None else "No response"
+                print(f"Response Body: {response_text}")
                 return None
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching {self.provider_name} data: {e}")
-            response_text = response.text if response is not None else "No response"
-            print(f"Response Body: {response_text}")
-            return None
-        except json.JSONDecodeError as e:
-            print(f"Error decoding {self.provider_name} JSON response: {e}")
-            print(f"Response Text: {response.text if response else 'No response'}")
-            return None
-        except Exception as e:
-            print(f"An unexpected error occurred during {self.provider_name} fetch/transform: {e}")
-            traceback.print_exc()
-            return None
+            except json.JSONDecodeError as e:
+                print(f"Error decoding {self.provider_name} JSON response: {e}")
+                print(f"Response Text: {await response.text() if response else 'No response'}")
+                return None
+            except Exception as e:
+                print(f"An unexpected error occurred during {self.provider_name} fetch/transform: {e}")
+                traceback.print_exc()
+                return None
 
 
 # --- Open-Meteo Subclass ---
@@ -928,7 +1112,7 @@ class OpenMeteoProvider(WeatherProvider):
         super().__init__(lat, lon, **kwargs)
         self.provider_name = "Open-Meteo"
 
-    def _fetch_from_api(self):
+    async def _fetch_from_api(self):
         """Fetches data from Open-Meteo API and transforms it."""
         print(f"Fetching data from {self.provider_name}...")
         base_url = "https://api.open-meteo.com/v1/forecast"
@@ -957,33 +1141,35 @@ class OpenMeteoProvider(WeatherProvider):
             ]
         }
         response = None
-        try:
-            response = requests.get(base_url, params=params, timeout=30)
-            print(f"Open-Meteo Response Status Code: {response.status_code}")
-            response.raise_for_status()
-            raw_data = response.json()
-            print(f"{self.provider_name} raw data fetched successfully.")
+        # Use aiohttp for async fetch
+        async with aiohttp.ClientSession() as session:
+            try:
+                async with session.get(base_url, params=params, timeout=30) as response:
+                    print(f"Open-Meteo Response Status Code: {response.status}")
+                    response.raise_for_status()
+                    raw_data = await response.json()
+                    print(f"{self.provider_name} raw data fetched successfully.")
 
-            transformed_data = transform_open_meteo_data(raw_data, self.lat, self.lon)
-            if transformed_data:
-                print("Open-Meteo data transformed successfully.")
-                return transformed_data
-            else:
-                print("Open-Meteo data transformation failed.")
+                    transformed_data = transform_open_meteo_data(raw_data, self.lat, self.lon)
+                    if transformed_data:
+                        print("Open-Meteo data transformed successfully.")
+                        return transformed_data
+                    else:
+                        print("Open-Meteo data transformation failed.")
+                        return None
+            except aiohttp.ClientError as e:
+                print(f"Error fetching {self.provider_name} data: {e}")
+                response_text = await response.text() if response is not None else "No response"
+                print(f"Response Body: {response_text}")
                 return None
-        except requests.exceptions.RequestException as e:
-            print(f"Error fetching {self.provider_name} data: {e}")
-            response_text = response.text if response is not None else "No response"
-            print(f"Response Body: {response_text}")
-            return None
-        except json.JSONDecodeError as e:
-            print(f"Error decoding {self.provider_name} JSON response: {e}")
-            print(f"Response Text: {response.text if response else 'No response'}")
-            return None
-        except Exception as e:
-            print(f"An unexpected error occurred during {self.provider_name} fetch/transform: {e}")
-            traceback.print_exc()
-            return None
+            except json.JSONDecodeError as e:
+                print(f"Error decoding {self.provider_name} JSON response: {e}")
+                print(f"Response Text: {await response.text() if response else 'No response'}")
+                return None
+            except Exception as e:
+                print(f"An unexpected error occurred during {self.provider_name} fetch/transform: {e}")
+                traceback.print_exc()
+                return None
 
 
 # --- Google Weather Provider Subclass ---
@@ -1000,7 +1186,7 @@ class GoogleWeatherProvider(WeatherProvider):
         if not api_key:
             raise ValueError("Google Maps Platform API key is required.")
 
-    def _fetch_from_api(self):
+    async def _fetch_from_api(self):
         """Fetches current, hourly, and daily data from Google Weather API using GET :lookup."""
         print(f"Fetching data from {self.provider_name}...")
         print("!!! WARNING: Google Weather API usage may incur costs. !!!")
@@ -1020,41 +1206,43 @@ class GoogleWeatherProvider(WeatherProvider):
         success = True
         response = None
 
-        for key, path_suffix in endpoint_paths.items():
-            response = None # Reset response for each request
-            url = f"{self.base_url}{path_suffix}"
-            request_params = base_lookup_params.copy()
-            if key == 'hourly':
-                request_params['hours'] = 48 # Request 48 hours
-            elif key == 'daily':
-                request_params['days'] = 8 # Request 8 days
+        # Use aiohttp for async fetch
+        async with aiohttp.ClientSession() as session:
+            for key, path_suffix in endpoint_paths.items():
+                response = None # Reset response for each request
+                url = f"{self.base_url}{path_suffix}"
+                request_params = base_lookup_params.copy()
+                if key == 'hourly':
+                    request_params['hours'] = 48 # Request 48 hours
+                elif key == 'daily':
+                    request_params['days'] = 8 # Request 8 days
 
-            print(f"Requesting {key} data from Google...")
-            print(f"Requesting GET URL: {url} with params: {request_params}")
+                print(f"Requesting {key} data from Google...")
+                print(f"Requesting GET URL: {url} with params: {request_params}")
 
-            try:
-                response = requests.get(url, params=request_params, timeout=30)
-                print(f"Google {key} Response Status Code: {response.status_code}")
-                response.raise_for_status()
-                raw_data[key] = response.json()
-                print(f"Google {key} data fetched successfully.")
+                try:
+                    async with session.get(url, params=request_params, timeout=30) as response:
+                        print(f"Google {key} Response Status Code: {response.status}")
+                        response.raise_for_status()
+                        raw_data[key] = await response.json()
+                        print(f"Google {key} data fetched successfully.")
 
-            except requests.exceptions.RequestException as e:
-                print(f"Error fetching Google {key} data: {e}")
-                response_text = response.text if response is not None else "No response"
-                print(f"Response Body: {response_text}")
-                success = False
-                break
-            except json.JSONDecodeError as e:
-                print(f"Error decoding Google {key} JSON response: {e}")
-                print(f"Response Text: {response.text if response else 'No response'}")
-                success = False
-                break
-            except Exception as e:
-                print(f"An unexpected error occurred during Google {key} fetch: {e}")
-                traceback.print_exc()
-                success = False
-                break
+                except aiohttp.ClientError as e:
+                    print(f"Error fetching Google {key} data: {e}")
+                    response_text = await response.text() if response is not None else "No response"
+                    print(f"Response Body: {response_text}")
+                    success = False
+                    break
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding Google {key} JSON response: {e}")
+                    print(f"Response Text: {await response.text() if response else 'No response'}")
+                    success = False
+                    break
+                except Exception as e:
+                    print(f"An unexpected error occurred during Google {key} fetch: {e}")
+                    traceback.print_exc()
+                    success = False
+                    break
 
         if not success:
             return None
@@ -1078,6 +1266,52 @@ class GoogleWeatherProvider(WeatherProvider):
         else:
             print("Google Weather data transformation failed.")
             return None
+
+
+# --- SMHI Provider Subclass ---
+class SMHIProvider(WeatherProvider):
+    """Weather provider for SMHI (Swedish Meteorological and Hydrological Institute) using pysmhi."""
+    def __init__(self, lat, lon, **kwargs):
+        super().__init__(lat, lon, **kwargs)
+        self.provider_name = "SMHI"
+        # Ensure pysmhi is available
+        try:
+            from pysmhi import SMHIPointForecast
+            self.SMHIPointForecast = SMHIPointForecast # Store for use in async method
+        except ImportError:
+            print("Error: pysmhi library not found. Please install it to use the SMHI provider.")
+            raise
+
+    async def _fetch_from_api(self):
+        """Fetches data from SMHI using pysmhi and transforms it."""
+        print(f"Fetching data from {self.provider_name}...")
+
+        # pysmhi requires an aiohttp session
+        async with aiohttp.ClientSession() as session:
+            try:
+                # SMHIPointForecast expects lon, lat order
+                client = self.SMHIPointForecast(str(self.lon), str(self.lat), session)
+
+                # Fetch both daily and hourly forecasts
+                smhi_daily_data = await client.async_get_daily_forecast()
+                smhi_hourly_data = await client.async_get_hourly_forecast()
+
+                print(f"{self.provider_name} raw data fetched successfully.")
+
+                # Transform the data
+                transformed_data = transform_smhi_data(smhi_daily_data, smhi_hourly_data, self.lat, self.lon)
+
+                if transformed_data:
+                    print("SMHI data transformed successfully.")
+                    return transformed_data
+                else:
+                    print("SMHI data transformation failed.")
+                    return None
+
+            except Exception as e:
+                print(f"Error fetching {self.provider_name} data: {e}")
+                traceback.print_exc()
+                return None
 
 
 # --- Factory Function ---
@@ -1125,9 +1359,18 @@ def get_weather_provider(config):
         except Exception as e:
              print(f"Error initializing GoogleWeatherProvider: {e}")
              return None
+    elif provider_name == "smhi":
+        try:
+            return SMHIProvider(lat, lon)
+        except ImportError: # pysmhi might not be installed
+            print("Failed to initialize SMHIProvider: pysmhi library likely missing.")
+            return None
+        except Exception as e:
+            print(f"Error initializing SMHIProvider: {e}")
+            return None
     else:
         print(
             f"Error: Unknown weather_provider '{provider_name}' in config.json. "
-            f"Use 'openweathermap', 'meteomatics', 'open-meteo', or 'google'."
+            f"Use 'openweathermap', 'meteomatics', 'open-meteo', 'google', or 'smhi'."
         )
         return None
