@@ -209,7 +209,7 @@ def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height,
         plt.close(fig) # Ensure figure is closed on error
 
 
-# --- MODIFIED create_weather_image signature and icon logic ---
+# --- create_weather_image signature and icon logic ---
 def create_weather_image(current_data, hourly_data, daily_data, output_path, icon_provider):
     """
     Creates the weather forecast image (600x448, with graph).

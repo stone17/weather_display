@@ -8,5 +8,6 @@
   "google_api_key": "YOUR_GOOGLE_MAPS_API_KEY",
   "openweathermap_api_key": "YOUR_OPENWEATHERMAP_API_KEY",
   "meteomatics_username": "YOUR_METEOMATICS_USERNAME",
-  "meteomatics_password": "YOUR_METEOMATICS_PASSWORD"
+  "meteomatics_password": "YOUR_METEOMATICS_PASSWORD",
+  "cache_duration_minutes": 120
 }

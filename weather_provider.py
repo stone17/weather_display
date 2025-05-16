@@ -255,12 +255,28 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
             transformed_data['hourly'].append(hour_entry)
 
     # Process Daily
+    processed_dates = set() # Keep track of dates already added to avoid duplicates
     if smhi_daily:
         for day_fc in smhi_daily:
             # pysmhi returns SMHIForecast objects, convert to dict
             day_dict = day_fc.__dict__ if hasattr(day_fc, '__dict__') else day_fc
 
-            day_ts = int(day_dict.get('valid_time', datetime.now(timezone.utc)).timestamp())
+            original_valid_time = day_dict.get('valid_time')
+            if not original_valid_time:
+                # Fallback, though pysmhi should provide this
+                original_valid_time = datetime.now(timezone.utc)
+
+            # Get the calendar date part (year, month, day)
+            day_date_obj = original_valid_time.date()
+
+            if day_date_obj in processed_dates:
+                continue # Skip if this calendar date has already been processed
+            processed_dates.add(day_date_obj)
+
+            # Normalize the timestamp to the start of the day (midnight UTC)
+            normalized_dt_utc = datetime(day_date_obj.year, day_date_obj.month, day_date_obj.day, 0, 0, 0, tzinfo=timezone.utc)
+            day_ts = int(normalized_dt_utc.timestamp())
+
             temp_max = day_dict.get('temperature_max', day_dict.get('temperature', 0.0))
             temp_min = day_dict.get('temperature_min', day_dict.get('temperature', 0.0))
             total_precipitation = day_dict.get('total_precipitation', 0.0)
@@ -900,11 +916,12 @@ def transform_google_weather_data(google_raw_data, lat, lon):
 # --- Base Class ---
 class WeatherProvider(ABC):
     """Abstract base class for weather data providers."""
-    def __init__(self, lat, lon, cache_file=CACHE_FILE, cache_duration=CACHE_DURATION_MINUTES):
+    def __init__(self, lat, lon, cache_file=CACHE_FILE, cache_duration_minutes=CACHE_DURATION_MINUTES):
         self.lat = lat
         self.lon = lon
         self.cache_file = cache_file
-        self.cache_duration = timedelta(minutes=cache_duration)
+        # Use the passed cache_duration_minutes
+        self.cache_duration = timedelta(minutes=cache_duration_minutes)
         self._data = None
         self.provider_name = "UnknownProvider" # Default, should be overridden
 
@@ -924,14 +941,25 @@ class WeatherProvider(ABC):
         """Loads data from the cache file."""
         try:
             with open(self.cache_file, 'r') as f:
-                data = json.load(f)
-            # Basic validation
-            if isinstance(data, dict) and 'current' in data and 'hourly' in data and 'daily' in data:
-                 self._data = data
-                 print(f"Using cached weather data for {self.provider_name}.")
-                 return True
+                cached_content = json.load(f)
+
+            # Check if the cache is from the correct provider
+            if cached_content.get('cached_provider_name') != self.provider_name:
+                print(f"Cache file is for provider '{cached_content.get('cached_provider_name')}', "
+                      f"but current provider is '{self.provider_name}'. Discarding cache.")
+                return False
+
+            # Basic validation of the weather data structure
+            weather_data = cached_content.get('weather_data')
+            if isinstance(weather_data, dict) and \
+               'current' in weather_data and \
+               'hourly' in weather_data and \
+               'daily' in weather_data:
+                self._data = weather_data
+                print(f"Using cached weather data for {self.provider_name}.")
+                return True
             else:
-                print(f"Cached data format invalid for {self.provider_name}.")
+                print(f"Cached weather_data format invalid for {self.provider_name}.")
                 return False
         except (json.JSONDecodeError, OSError, Exception) as e:
             print(f"Error loading or validating cache file {self.cache_file} for {self.provider_name}: {e}")
@@ -940,9 +968,13 @@ class WeatherProvider(ABC):
     def _save_to_cache(self, data_to_save):
         """Saves the current data to the cache file."""
         if data_to_save:
+            cache_content = {
+                'cached_provider_name': self.provider_name,
+                'weather_data': data_to_save
+            }
             try:
                 with open(self.cache_file, 'w') as f:
-                    json.dump(data_to_save, f, indent=4)
+                    json.dump(cache_content, f, indent=4)
                 print(f"Weather data for {self.provider_name} saved to cache: {self.cache_file}")
             except (OSError, TypeError) as e:
                 print(f"Error saving data to cache {self.cache_file} for {self.provider_name}: {e}")
@@ -956,10 +988,9 @@ class WeatherProvider(ABC):
 
     async def fetch_data(self):
         """Fetches data, using cache if valid, otherwise calls API."""
-        if self._is_cache_valid():
-            if self._load_from_cache():
-                return True # Data loaded from cache
-        
+        if self._is_cache_valid() and self._load_from_cache():
+            return True # Data loaded from cache
+
         print(f"Fetching new weather data from API for {self.provider_name}...")
         fetched_api_data = await self._fetch_from_api() # Call the subclass implementation
 
@@ -1322,11 +1353,12 @@ def get_weather_provider(config):
     provider_name = config.get("weather_provider", "openweathermap").lower()
     lat = config.get("latitude")
     lon = config.get("longitude")
+    cache_duration_cfg = config.get("cache_duration_minutes", CACHE_DURATION_MINUTES) # Read from config
 
     if lat is None or lon is None:
         raise ValueError("Latitude and Longitude must be defined in config.json")
 
-    print(f"Attempting to initialize provider: {provider_name}")
+    print(f"Attempting to initialize provider: {provider_name} with cache duration: {cache_duration_cfg} minutes")
 
     if provider_name == "meteomatics":
         username = config.get("meteomatics_username")
@@ -1334,25 +1366,25 @@ def get_weather_provider(config):
         try:
             return MeteomaticsProvider(username, password, lat, lon)
         except ValueError as e:
-            print(f"Configuration error for Meteomatics: {e}")
+            print(f"Configuration error for Meteomatics: {e}. Using cache duration: {cache_duration_cfg} min.")
             return None
     elif provider_name == "openweathermap":
         api_key = config.get("openweathermap_api_key")
         try:
-            return OpenWeatherMapProvider(api_key, lat, lon)
+            return OpenWeatherMapProvider(api_key, lat, lon, cache_duration_minutes=cache_duration_cfg)
         except ValueError as e:
             print(f"Configuration error for OpenWeatherMap: {e}")
             return None
     elif provider_name == "open-meteo":
         try:
-            return OpenMeteoProvider(lat, lon)
+            return OpenMeteoProvider(lat, lon, cache_duration_minutes=cache_duration_cfg)
         except Exception as e:
             print(f"Error initializing OpenMeteoProvider: {e}")
             return None
     elif provider_name == "google":
         api_key = config.get("google_api_key")
         try:
-            return GoogleWeatherProvider(api_key, lat, lon)
+            return GoogleWeatherProvider(api_key, lat, lon, cache_duration_minutes=cache_duration_cfg)
         except ValueError as e:
             print(f"Configuration error for Google Weather: {e}")
             return None
@@ -1361,7 +1393,7 @@ def get_weather_provider(config):
              return None
     elif provider_name == "smhi":
         try:
-            return SMHIProvider(lat, lon)
+            return SMHIProvider(lat, lon, cache_duration_minutes=cache_duration_cfg)
         except ImportError: # pysmhi might not be installed
             print("Failed to initialize SMHIProvider: pysmhi library likely missing.")
             return None
