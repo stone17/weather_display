@@ -8,6 +8,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 * Shows a detailed hourly forecast graph (temperature, wind, rain).
 * Provides a multi-day forecast summary (icons, high/low temperatures, rain, wind, UV).
 * Supports multiple weather data providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI) via configuration.
+* **Mix and Match Data:** Optionally supplement data from the primary provider with specific parameters (like UV index) from other configured providers.
 * Selectable icon source (OWM or Google) independent of the data provider.
 * Caches weather data to reduce API calls.
 * Provider-specific caching: Cache is invalidated if the weather provider is changed.
@@ -76,6 +77,33 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
         *   `weather_provider`: Choose the source for weather data: `"openweathermap"`, `"open-meteo"`, `"meteomatics"`, or `"google"`.
         *   `icon_provider`: Choose the source for icons: `"openweathermap"` (uses OWM-style icons, recommended for e-ink contrast) or `"google"` (uses Google icons if available in the data).
         *   Fill in the corresponding API key/credentials for your chosen `weather_provider`. Keys for unused providers can be left blank or as placeholders.
+                *   `cache_duration_minutes`: (Integer, optional) How long the weather data cache is considered fresh, in minutes. Defaults to `60` if not specified.
+
+    *   **Supplemental Providers (Optional):**
+        You can configure the script to fetch specific data points from providers other than your primary `weather_provider` and merge them into the main dataset. This is useful if your primary provider lacks certain parameters (like UV index from SMHI's point forecast).
+
+        Add a `supplemental_providers` key to your `config.json`. This should be a list of objects, each specifying a `provider_name` and a list of `parameters` to merge.
+
+        ```json
+        {
+          "...": "your primary config here",
+          "supplemental_providers": [
+            {
+              "provider_name": "open-meteo",
+              "parameters": ["uvi", "rain"]
+            },
+            {
+              "provider_name": "google",
+              "parameters": ["wind_speed"]
+            }
+          ]
+        }
+        ```
+
+        **Available Parameters for Merging:**
+        Common parameters you can list in the `"parameters"` array include: `"temp"`, `"feels_like"`, `"humidity"`, `"uvi"`, `"wind_speed"`, `"wind_gust"`, `"weather"`, `"rain"`, `"snow"`, `"summary"`.
+        Note that the supplemental provider must actually provide data for the parameters you list. Merging replaces the entire value for that parameter (including nested dictionaries/lists like `temp` for daily or `weather`).
+
 3.  **Install Requirements:**
     *   Open a terminal or command prompt in the project directory.
     *   Run: `pip install -r requirements.txt`
