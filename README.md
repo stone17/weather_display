@@ -5,11 +5,14 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 ## Features
 
 * Displays current weather conditions (temperature, icon, description).
-* Shows a detailed 24-hour forecast graph (temperature, wind, rain).
-* Provides a 5-day forecast summary (icons, high/low temperatures, rain, wind, UV).
-* Supports multiple weather data providers (OWM, Open-Meteo, Meteomatics, Google) via configuration.
+* Shows a detailed hourly forecast graph (temperature, wind, rain).
+* Provides a multi-day forecast summary (icons, high/low temperatures, rain, wind, UV).
+* Supports multiple weather data providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI) via configuration.
 * Selectable icon source (OWM or Google) independent of the data provider.
 * Caches weather data to reduce API calls.
+* Provider-specific caching: Cache is invalidated if the weather provider is changed.
+* Configurable cache lifetime.
+* Asynchronous data fetching for improved performance.
 * Optimized for 7-color e-Paper displays.
 
 ![Alt text](images/weather.png)
@@ -29,7 +32,9 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
     * requests
     * Pillow (PIL)
     * matplotlib
+    * pysmhi
     * IPy
+    * aiohttp
 
 ## Resources
 
@@ -46,6 +51,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
         *   **OpenWeatherMap:** API Key for One Call API 3.0.
         *   **Open-Meteo:** No key required.
         *   **Meteomatics:** Username and Password.
+        *   **SMHI:** No key required (uses `pysmhi` library).
         *   **Google Weather:** Google Cloud Platform API Key with Weather API enabled (Note: This is a paid service).
     *   **Create `config.json`:** Create a file named `config.json` in the same directory as the Python scripts. Use the example below and fill in your details:
 
@@ -54,13 +60,14 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
            "latitude": YOUR_LATITUDE,
            "longitude": YOUR_LONGITUDE,
            "server_ip": "YOUR_ESP32_IP_ADDRESS",
-           "weather_provider": "google",
+           "weather_provider": "smhi",
            "icon_provider": "openweathermap",
-           "provider_comment" : ["open-meteo", "openweathermap", "meteomatics", "google"],
+           "provider_comment" : ["open-meteo", "openweathermap", "meteomatics", "google", "smhi"],
+           "cache_duration_minutes": 10,
            "google_api_key": "YOUR_GOOGLE_MAPS_API_KEY",
            "openweathermap_api_key": "YOUR_OPENWEATHERMAP_API_KEY",
            "meteomatics_username": "YOUR_METEOMATICS_USERNAME",
-           "meteomatics_password": "YOUR_METEOMATICS_PASSWORD"
+           "meteomatics_password": "YOUR_METEOMATICS_PASSWORD",
         }
         ```
     *   **Configuration Details:**

@@ -9,5 +9,5 @@
   "openweathermap_api_key": "YOUR_OPENWEATHERMAP_API_KEY",
   "meteomatics_username": "YOUR_METEOMATICS_USERNAME",
   "meteomatics_password": "YOUR_METEOMATICS_PASSWORD",
-  "cache_duration_minutes": 120
+  "cache_duration_minutes": 10
 }
