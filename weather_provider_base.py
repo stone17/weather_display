@@ -193,11 +193,11 @@ def get_weather_provider(config):
     Factory function to create and return the appropriate WeatherProvider instance.
     """
     # Import provider classes here to avoid circular dependencies if they also import from base
-    from weather_display.providers.provider_owm import OpenWeatherMapProvider
-    from weather_display.providers.provider_meteomatics import MeteomaticsProvider
-    from weather_display.providers.provider_openmeteo import OpenMeteoProvider
-    from weather_display.providers.provider_google import GoogleWeatherProvider
-    from weather_display.providers.provider_smhi import SMHIProvider
+    from providers.provider_owm import OpenWeatherMapProvider
+    from providers.provider_meteomatics import MeteomaticsProvider
+    from providers.provider_openmeteo import OpenMeteoProvider
+    from providers.provider_google import GoogleWeatherProvider
+    from providers.provider_smhi import SMHIProvider
 
     provider_name = config.get("weather_provider", "openweathermap").lower()
     lat = config.get("latitude")
