@@ -63,7 +63,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
            "server_ip": "YOUR_ESP32_IP_ADDRESS",
            "weather_provider": "smhi",
            "icon_provider": "openweathermap",
-           "provider_comment" : ["open-meteo", "openweathermap", "meteomatics", "google", "smhi"],
+           "provider_list" : ["open-meteo", "openweathermap", "meteomatics", "google", "smhi"],
            "cache_duration_minutes": 10,
            "google_api_key": "YOUR_GOOGLE_MAPS_API_KEY",
            "openweathermap_api_key": "YOUR_OPENWEATHERMAP_API_KEY",

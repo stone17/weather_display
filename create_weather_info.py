@@ -20,18 +20,24 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from IPy import IP
 import asyncio
+import sys # Add this
+import os  # Add this
 
 # Local application imports
 import upload
-import weather_provider
+
+# Adjust Python path to correctly handle relative imports when running this script directly
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(current_dir)
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+from weather_display.weather_provider_base import get_weather_provider
 
 
 # Global variable for image, used by create_24h_forecast_section
 image = None
 
 
-# --- download_and_cache_icon (Keep as is - using /img/w/) ---
-# (Function remains exactly as provided in the base code)
 def download_and_cache_icon(icon_identifier, icon_cache_dir="icon_cache"):
     """
     Downloads and caches weather icons.
@@ -91,8 +97,7 @@ def download_and_cache_icon(icon_identifier, icon_cache_dir="icon_cache"):
         return None
 
 
-# --- create_24h_forecast_section (Keep as is) ---
-# (Function remains exactly as provided in the base code)
+# --- create_24h_forecast_section ---
 def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height, font_path, font_size):
     """Creates the 24-hour forecast section (graph) on the image."""
     global image # Need global image to paste onto
@@ -219,7 +224,6 @@ def create_weather_image(current_data, hourly_data, daily_data, output_path, ico
 
     if not current_data or not hourly_data or not daily_data:
         print("Error: Missing essential weather data for image creation.")
-        # ... (Error handling remains the same) ...
         image = Image.new("RGB", (600, 448), "white")
         draw = ImageDraw.Draw(image)
         try: 
@@ -466,7 +470,7 @@ async def main():
     print(f"Using icon provider: {icon_provider}")
 
     # --- Get Weather Provider Instance ---
-    provider = weather_provider.get_weather_provider(config)
+    provider = get_weather_provider(config)
     if not provider:
         print("Failed to initialize weather provider. Exiting.")
         exit(1)
