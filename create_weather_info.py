@@ -31,7 +31,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-from weather_display.weather_provider_base import get_weather_provider
+from weather_provider_base import get_weather_provider
 
 
 # Global variable for image, used by create_24h_forecast_section
