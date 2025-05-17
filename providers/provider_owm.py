@@ -3,7 +3,7 @@ import json
 import traceback
 import aiohttp
 
-from ..weather_provider_base import WeatherProvider
+from weather_provider_base import WeatherProvider
 
 class OpenWeatherMapProvider(WeatherProvider):
     """Weather provider for OpenWeatherMap OneCall API."""

@@ -5,7 +5,7 @@ import math
 import traceback
 import aiohttp
 
-from ..weather_provider_base import WeatherProvider, parse_iso_time
+from weather_provider_base import WeatherProvider, parse_iso_time
 
 # --- Meteomatics SYMBOL Mappings ---
 METEOMATICS_TO_OWM_ICON = {

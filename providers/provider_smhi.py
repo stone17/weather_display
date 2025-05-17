@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import traceback
 import aiohttp
 
-from ..weather_provider_base import WeatherProvider, parse_iso_time
+from weather_provider_base import WeatherProvider, parse_iso_time
 
 # --- SMHI SYMBOL Mappings ---
 SMHI_SYMBOL_TO_OWM_ICON = {

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import traceback
 import aiohttp
 
-from ..weather_provider_base import WeatherProvider, parse_iso_time
+from weather_provider_base import WeatherProvider, parse_iso_time
 
 # --- Open-Meteo WMO CODE Mappings ---
 WMO_CODE_TO_OWM_ICON = {

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import traceback
 import aiohttp
 
-from ..weather_provider_base import WeatherProvider, parse_iso_time, parse_google_date
+from weather_provider_base import WeatherProvider, parse_iso_time, parse_google_date
 
 # --- Google Weather Condition Mappings ---
 GOOGLE_CONDITION_TO_OWM_ICON = {

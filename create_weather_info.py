@@ -20,15 +20,14 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from IPy import IP
 import asyncio
-import sys # Add this
-import os  # Add this
+import sys
+import os
 
 # Local application imports
 import upload
 
 # Adjust Python path to correctly handle relative imports when running this script directly
-current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.dirname(current_dir)
+project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 from weather_provider_base import get_weather_provider
