@@ -1,4 +1,5 @@
 # create_weather_info.py
+import argparse
 import requests
 import json
 import os
@@ -450,17 +451,27 @@ def create_weather_image(current_data, hourly_data, daily_data, output_path, ico
 
 # --- Main Execution ---
 async def main():
+    # Use the globally defined project_root for the default config path
+    default_config_path = os.path.join(project_root, "config.json")
+
+    parser = argparse.ArgumentParser(description="Create and optionally upload a weather display image.")
+    parser.add_argument(
+        "--config",
+        dest="config_path",
+        default=default_config_path,
+        help=f"Path to the configuration JSON file (default: {default_config_path})"
+    )
+    args = parser.parse_args()
+
     output_image_path = "weather_forecast_graph.png"
 
     # --- Load Config ---
     try:
-        with open("config.json", "r") as config_file:
+        print(f"Loading configuration from: {args.config_path}")
+        with open(args.config_path, "r") as config_file:
             config = json.load(config_file)
-    except json.JSONDecodeError as e:
-        print(f"Error loading config.json: {e}")
-        exit(1)
-    except FileNotFoundError:
-        print("Error: config.json not found.")
+    except (FileNotFoundError, json.JSONDecodeError) as e:
+        print(f"Error loading configuration file '{args.config_path}': {e}")
         exit(1)
 
     # --- Get Icon Provider Setting ---

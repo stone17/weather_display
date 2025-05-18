@@ -109,6 +109,12 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
     *   Run: `pip install -r requirements.txt`
 4.  **Run the Script:**
     *   Execute `python create_weather_info.py`. This will fetch weather data (using cache if available), create the `weather_forecast_graph.png` image, and attempt to upload it to your ESP32 if `server_ip` is configured.
+    *   By default, the script will look for `config.json` in the same directory as `create_weather_info.py`.
+    *   You can specify a custom path to your configuration file using the `--config` argument:
+        ```bash
+        python c:\Toolz\weather_display\create_weather_info.py --config /path/to/your/custom_config.json
+        ```
+
 
 ## Customization
 
