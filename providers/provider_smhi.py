@@ -57,9 +57,20 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
                           'description': description, 'icon': owm_icon}],
                           'rain': {'1h': mean_precipitation}, 'pop': 0}
             transformed_data['hourly'].append(hour_entry)
-    processed_dates = set()
+
+    # --- Daily Data Processing ---
+    start_index = 0
     if smhi_daily:
-        for day_fc in smhi_daily:
+        # Check if the first two entries are for the same calendar day
+        first_day_date = getattr(smhi_daily[0], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
+        second_day_date = getattr(smhi_daily[1], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
+        if first_day_date == second_day_date:
+            print(f"SMHI: First two daily entries are for the same day ({first_day_date}). Starting daily forecast from the second entry.")
+            start_index = 1
+
+        processed_dates = set()
+        # Process daily entries starting from the determined index
+        for day_fc in smhi_daily[start_index:]: # Loop variable is day_fc
             day_dict = day_fc.__dict__ if hasattr(day_fc, '__dict__') else day_fc
             original_valid_time = day_dict.get('valid_time', datetime.now(timezone.utc))
             day_date_obj = original_valid_time.date()
@@ -97,7 +108,18 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
                                         'wind_speed': first_daily['wind_speed'], 'wind_deg': first_daily['wind_deg'], 'wind_gust': first_daily['wind_gust'],
                                         'weather': first_daily['weather'], 'rain': {'1h': 0}, 'pop': first_daily['pop'],
                                         'sunrise': first_daily['sunrise'], 'sunset': first_daily['sunset']}
-    if not transformed_data['current']: print("ERROR: SMHI Transformation resulted in empty 'current' data.")
+    if not transformed_data['current']:
+        print("ERROR: SMHI Transformation resulted in empty 'current' data.")
+        # Create a minimal fallback current if all else fails
+        transformed_data['current'] = {
+            'dt': int(datetime.now(timezone.utc).timestamp()),
+            'temp': 0,
+            'feels_like': 0,
+            'weather': [{'icon': 'na', 'description': 'Unknown'}],
+            'sunrise': 0,
+            'sunset': 0
+        }
+
     return transformed_data
 
 class SMHIProvider(WeatherProvider):
