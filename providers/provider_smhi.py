@@ -102,7 +102,8 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
 
 class SMHIProvider(WeatherProvider):
     def __init__(self, lat, lon, **kwargs):
-        super().__init__(lat, lon, **kwargs)
+        provider_id = kwargs.pop("provider_id_for_cache", "smhi") # Default if somehow missing
+        super().__init__(lat, lon, provider_id_for_cache=provider_id, **kwargs)
         self.provider_name = "SMHI"
         try:
             from pysmhi import SMHIPointForecast

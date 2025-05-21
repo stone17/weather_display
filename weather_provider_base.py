@@ -8,7 +8,7 @@ import aiohttp # For async HTTP client
 
 # --- Constants ---
 CACHE_DURATION_MINUTES = 60
-CACHE_FILE = "weather_data_cache_provider.json" # Use a dedicated cache file
+DEFAULT_CACHE_FILENAME_SUFFIX = "_weather_data_cache.json" # Renamed and will be part of path
 
 # --- Common Helper Functions ---
 def parse_iso_time(iso_time_str):
@@ -47,14 +47,26 @@ def parse_google_date(date_obj):
 # --- Base Class ---
 class WeatherProvider(ABC):
     """Abstract base class for weather data providers."""
-    def __init__(self, lat, lon, cache_file=CACHE_FILE, cache_duration_minutes=CACHE_DURATION_MINUTES):
+    def __init__(self, lat, lon, provider_id_for_cache, **kwargs):
         self.lat = lat
         self.lon = lon
-        self.cache_file = cache_file
-        self.cache_duration = timedelta(minutes=cache_duration_minutes)
+
+        project_root_path = kwargs.get("project_root_path")
+        if not project_root_path:
+            print(f"Warning: project_root_path not provided for {provider_id_for_cache}. Cache will be in current directory: {os.getcwd()}")
+            project_root_path = os.getcwd()
+
+        cache_duration_cfg = kwargs.get("cache_duration_minutes", CACHE_DURATION_MINUTES)
+        self.cache_duration = timedelta(minutes=cache_duration_cfg)
+
+        # Construct the full cache file path
+        cache_filename = f"{provider_id_for_cache.lower().replace(' ', '_').replace('-', '_')}{DEFAULT_CACHE_FILENAME_SUFFIX}"
+        self.cache_file = os.path.join(project_root_path, cache_filename)
+        print(f"DEBUG: {provider_id_for_cache} will use cache file: {self.cache_file}")
+
         self._data = None
         self.supplemental_providers_info = []
-        self.provider_name = "UnknownProvider"
+        self.provider_name = "UnknownProvider" # Subclasses should override this for display/logging
 
     def _is_cache_valid(self):
         if not os.path.exists(self.cache_file):
@@ -188,7 +200,7 @@ class WeatherProvider(ABC):
         return self._data
 
 # --- Factory Function ---
-def get_weather_provider(config):
+def get_weather_provider(config, project_root_path_from_caller): # Added project_root
     """
     Factory function to create and return the appropriate WeatherProvider instance.
     """
@@ -199,7 +211,7 @@ def get_weather_provider(config):
     from providers.provider_google import GoogleWeatherProvider
     from providers.provider_smhi import SMHIProvider
 
-    provider_name = config.get("weather_provider", "openweathermap").lower()
+    provider_config_name = config.get("weather_provider", "openweathermap").lower() # This is the ID for cache
     lat = config.get("latitude")
     lon = config.get("longitude")
     cache_duration_cfg = config.get("cache_duration_minutes", CACHE_DURATION_MINUTES)
@@ -208,38 +220,46 @@ def get_weather_provider(config):
     if lat is None or lon is None:
         raise ValueError("Latitude and Longitude must be defined in config.json")
 
-    print(f"Attempting to initialize provider: {provider_name} with cache duration: {cache_duration_cfg} minutes")
+    print(f"Attempting to initialize provider: {provider_config_name} with cache duration: {cache_duration_cfg} minutes")
 
-    def _instantiate_provider(p_name, is_supplemental=False):
-        # Pass cache_duration_cfg to all provider constructors
-        if p_name == "meteomatics":
+    def _instantiate_provider(p_config_name_arg, is_supplemental=False):
+        # Common arguments to be passed to all provider constructors via **kwargs
+        common_provider_args = {
+            "lat": lat,
+            "lon": lon,
+            "project_root_path": project_root_path_from_caller,
+            "cache_duration_minutes": cache_duration_cfg,
+            "provider_id_for_cache": p_config_name_arg # Crucial for base class to name cache file
+        }
+
+        if p_config_name_arg == "meteomatics":
             username = config.get("meteomatics_username")
             password = config.get("meteomatics_password")
-            return MeteomaticsProvider(username, password, lat, lon, cache_duration_minutes=cache_duration_cfg)
-        elif p_name == "openweathermap":
+            return MeteomaticsProvider(username, password, **common_provider_args)
+        elif p_config_name_arg == "openweathermap":
             api_key = config.get("openweathermap_api_key")
-            return OpenWeatherMapProvider(api_key, lat, lon, cache_duration_minutes=cache_duration_cfg)
-        elif p_name == "open-meteo":
-            return OpenMeteoProvider(lat, lon, cache_duration_minutes=cache_duration_cfg)
-        elif p_name == "google":
+            return OpenWeatherMapProvider(api_key, **common_provider_args)
+        elif p_config_name_arg == "open-meteo":
+            return OpenMeteoProvider(**common_provider_args) # No API key needed for OpenMeteo
+        elif p_config_name_arg == "google":
             api_key = config.get("google_api_key")
-            return GoogleWeatherProvider(api_key, lat, lon, cache_duration_minutes=cache_duration_cfg)
-        elif p_name == "smhi":
-            return SMHIProvider(lat, lon, cache_duration_minutes=cache_duration_cfg)
+            return GoogleWeatherProvider(api_key, **common_provider_args)
+        elif p_config_name_arg == "smhi":
+            return SMHIProvider(**common_provider_args) # No API key needed for SMHI
         else:
-            print(f"Error: Unknown provider name '{p_name}' encountered.")
+            print(f"Error: Unknown provider name '{p_config_name_arg}' encountered.")
             return None
 
     primary_provider = None
     try:
-        primary_provider = _instantiate_provider(provider_name)
+        primary_provider = _instantiate_provider(provider_config_name)
     except Exception as e:
-        print(f"Error initializing primary provider '{provider_name}': {e}")
+        print(f"Error initializing primary provider '{provider_config_name}': {e}")
         traceback.print_exc() # Added for more detail
         return None
 
     if not primary_provider:
-        print(f"Failed to initialize primary provider '{provider_name}'.")
+        print(f"Failed to initialize primary provider '{provider_config_name}'.")
         return None
 
     for sup_config in supplemental_providers_config:
@@ -253,7 +273,7 @@ def get_weather_provider(config):
             continue
         print(f"Initializing supplemental provider: {sup_provider_name} for parameters: {sup_parameters}")
         try:
-            supplemental_instance = _instantiate_provider(sup_provider_name, is_supplemental=True)
+            supplemental_instance = _instantiate_provider(sup_provider_name.lower(), is_supplemental=True)
             if supplemental_instance:
                 primary_provider.supplemental_providers_info.append({
                     'instance': supplemental_instance,

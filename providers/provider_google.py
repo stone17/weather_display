@@ -126,7 +126,8 @@ def transform_google_weather_data(google_raw_data, lat, lon):
 
 class GoogleWeatherProvider(WeatherProvider):
     def __init__(self, api_key, lat, lon, **kwargs):
-        super().__init__(lat, lon, **kwargs)
+        provider_id = kwargs.pop("provider_id_for_cache", "google") # Default if somehow missing
+        super().__init__(lat, lon, provider_id_for_cache=provider_id, **kwargs)
         self.api_key = api_key
         self.provider_name = "Google Weather"
         self.base_url = "https://weather.googleapis.com/v1"

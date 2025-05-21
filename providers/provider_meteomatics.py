@@ -136,7 +136,8 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
 
 class MeteomaticsProvider(WeatherProvider):
     def __init__(self, username, password, lat, lon, **kwargs):
-        super().__init__(lat, lon, **kwargs)
+        provider_id = kwargs.pop("provider_id_for_cache", "meteomatics") # Default if somehow missing
+        super().__init__(lat, lon, provider_id_for_cache=provider_id, **kwargs)
         self.username = username
         self.password = password
         self.provider_name = "Meteomatics"

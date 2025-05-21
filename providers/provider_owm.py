@@ -8,7 +8,8 @@ from weather_provider_base import WeatherProvider
 class OpenWeatherMapProvider(WeatherProvider):
     """Weather provider for OpenWeatherMap OneCall API."""
     def __init__(self, api_key, lat, lon, **kwargs):
-        super().__init__(lat, lon, **kwargs)
+        provider_id = kwargs.pop("provider_id_for_cache", "openweathermap") # Default if somehow missing
+        super().__init__(lat, lon, provider_id_for_cache=provider_id, **kwargs)
         self.api_key = api_key
         self.provider_name = "OpenWeatherMap"
         if not api_key:

@@ -45,7 +45,8 @@ def download_and_cache_icon(icon_identifier, icon_cache_dir="icon_cache"):
     Handles full URLs (e.g., from Google).
     Generates filename based on identifier (code or hash of URL).
     """
-    os.makedirs(icon_cache_dir, exist_ok=True)
+    full_icon_cache_dir = os.path.join(project_root, icon_cache_dir)
+    os.makedirs(full_icon_cache_dir, exist_ok=True)
 
     is_url = isinstance(icon_identifier, str) and icon_identifier.startswith('http')
     icon_url = None
@@ -71,7 +72,7 @@ def download_and_cache_icon(icon_identifier, icon_cache_dir="icon_cache"):
         print(f"Skipping download for invalid icon identifier: {icon_identifier}")
         return None
 
-    icon_path = os.path.join(icon_cache_dir, icon_filename)
+    icon_path = os.path.join(full_icon_cache_dir, icon_filename)
 
     # Check cache using the correct filename (e.g., code.png)
     if os.path.exists(icon_path):
@@ -463,7 +464,8 @@ async def main():
     )
     args = parser.parse_args()
 
-    output_image_path = "weather_forecast_graph.png"
+    output_image_path = os.path.join(project_root, "weather_forecast_graph.png")
+
 
     # --- Load Config ---
     try:
@@ -480,7 +482,7 @@ async def main():
     print(f"Using icon provider: {icon_provider}")
 
     # --- Get Weather Provider Instance ---
-    provider = get_weather_provider(config)
+    provider = get_weather_provider(config, project_root)
     if not provider:
         print("Failed to initialize weather provider. Exiting.")
         exit(1)

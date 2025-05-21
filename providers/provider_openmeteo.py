@@ -133,7 +133,8 @@ def transform_open_meteo_data(om_json, lat, lon):
 
 class OpenMeteoProvider(WeatherProvider):
     def __init__(self, lat, lon, **kwargs):
-        super().__init__(lat, lon, **kwargs)
+        provider_id = kwargs.pop("provider_id_for_cache", "open-meteo") # Default if somehow missing
+        super().__init__(lat, lon, provider_id_for_cache=provider_id, **kwargs)
         self.provider_name = "Open-Meteo"
 
     async def _fetch_from_api(self):
