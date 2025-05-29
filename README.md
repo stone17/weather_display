@@ -31,11 +31,12 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 * Python 3.7 or higher (due to newer library features like `datetime.fromisoformat`)
 * Required Python packages (install with `pip install -r requirements.txt`):
     * requests
-    * Pillow (PIL)
+    * Pillow (PIL) 
     * matplotlib
     * pysmhi
     * IPy
     * aiohttp
+    * PyYAML (for YAML configuration)
 
 ## Resources
 
@@ -54,22 +55,28 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
         *   **Meteomatics:** Username and Password.
         *   **SMHI:** No key required (uses `pysmhi` library).
         *   **Google Weather:** Google Cloud Platform API Key with Weather API enabled (Note: This is a paid service).
-    *   **Create `config.json`:** Create a file named `config.json` in the same directory as the Python scripts. Use the example below and fill in your details:
+    *   **Create `config.yaml`:** Create a file named `config.yaml` in the same directory as the Python scripts. Use the example below and fill in your details:
 
-        ```json
-        {
-           "latitude": YOUR_LATITUDE,
-           "longitude": YOUR_LONGITUDE,
-           "server_ip": "YOUR_ESP32_IP_ADDRESS",
-           "weather_provider": "smhi",
-           "icon_provider": "openweathermap",
-           "provider_list" : ["open-meteo", "openweathermap", "meteomatics", "google", "smhi"],
-           "cache_duration_minutes": 10,
-           "google_api_key": "YOUR_GOOGLE_MAPS_API_KEY",
-           "openweathermap_api_key": "YOUR_OPENWEATHERMAP_API_KEY",
-           "meteomatics_username": "YOUR_METEOMATICS_USERNAME",
-           "meteomatics_password": "YOUR_METEOMATICS_PASSWORD",
-        }
+        ```yaml
+        latitude: YOUR_LATITUDE
+        longitude: YOUR_LONGITUDE
+        server_ip: "YOUR_ESP32_IP_ADDRESS" # Leave empty ("") if not uploading
+        weather_provider: "smhi" # "openweathermap", "open-meteo", "meteomatics", "google", or "smhi"
+        icon_provider: "openweathermap" # "openweathermap" or "google"
+        provider_list:
+          - "open-meteo"
+          - "openweathermap"
+          - "meteomatics"
+          - "google"
+          - "smhi"
+        cache_duration_minutes: 10 # Optional, defaults to 60
+        
+        # API Keys - only fill for providers you use
+        # Keys for unused providers can be omitted entirely in YAML
+        google_api_key: "YOUR_GOOGLE_CLOUD_API_KEY"
+        openweathermap_api_key: "YOUR_OPENWEATHERMAP_API_KEY"
+        meteomatics_username: "YOUR_METEOMATICS_USERNAME"
+        meteomatics_password: "YOUR_METEOMATICS_PASSWORD"
         ```
     *   **Configuration Details:**
         *   `latitude`, `longitude`: Your location.
@@ -128,7 +135,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 *   **Display Issues:** Double-check the wiring between the ESP32 and the e-Paper display. Ensure the correct Waveshare firmware is flashed and running.
 *   **Network Errors:** Verify your ESP32 is connected to your WiFi network. Confirm the `server_ip` in `config.json` matches the ESP32's actual IP address. Check firewall settings if applicable.
 *   **API Errors:**
-    *   Verify the API key/credentials in `config.yaml` for your selected `weather_provider` are correct and active.
+    *   Verify the API key/credentials in `config.json` for your selected `weather_provider` are correct and active.
     *   Check the script output for specific error messages from the provider (e.g., 401 Unauthorized, 403 Forbidden, 429 Rate Limit).
     *   Consult the documentation for your chosen weather provider regarding API limits and potential costs (especially Google Weather).
     *   Check the status page of the weather provider if errors persist.
