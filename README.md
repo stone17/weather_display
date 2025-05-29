@@ -119,8 +119,85 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
     *   By default, the script will look for `config.json` in the same directory as `create_weather_info.py`.
     *   You can specify a custom path to your configuration file using the `--config` argument:
         ```bash
-        python c:\Toolz\weather_display\create_weather_info.py --config /path/to/your/custom_config.json
+        python c:\Toolz\weather_display\create_weather_info.py --config /path/to/your/custom_config.yaml
         ```
+
+5.  **Configuring the 24-Hour Forecast Graph (Optional):**
+    The appearance and content of the 24-hour forecast graph can be extensively customized within your `config.yaml` file under the `graph_24h_forecast_config` key.
+
+    Here's an example snippet showcasing some common configurations:
+
+    ```yaml
+    # In your config.yaml
+    graph_24h_forecast_config:
+      # --- General Graph Appearance ---
+      base_font_size: 10
+      show_y_grid_left: false
+      show_y_grid_right: true
+      graph_time_range_hours: 24
+
+      # --- X-Axis Configuration ---
+      x_axis_hour_interval: 6
+      x_axis_time_format: "%H" # e.g., "18" for 6 PM
+
+      # --- Legend Configuration ---
+      legend:
+        peak_value_display: # Displays max/min values directly on the graph
+          enabled: true
+          location: "in_graph"
+          start_anchor_y: 0.97
+          font_size: 9
+          line_y_step: 0.075
+
+      # --- Wind Arrow Configuration (on graph) ---
+      wind_arrows:
+        enabled: true
+        color: "darkgreen"
+        size: 12
+
+      # --- Series Configuration (lines on the graph) ---
+      series:
+        - parameter: "temp"
+          axis_label: "Temp (°C)"
+          axis: "right"
+          color: "#FF6347" # Tomato red
+          scale_type: "auto_padded"
+          data_occupancy_factor: 0.8
+        - parameter: "wind_speed"
+          legend_label: "Wind"
+          axis: "left"
+          color: "#32CD32" # Lime green
+          show_peak_in_legend: true # If peak_value_display is enabled
+          unit: "m/s"
+          scale_type: "manual_range"
+          y_axis_min: 0
+          y_axis_max: 20
+        - parameter: "rain"
+          legend_label: "Rain"
+          axis: "left"
+          color: "#1E90FF" # Dodger blue
+          plot_type: "fill_between" # Creates a filled area for rain
+          alpha: 0.4
+          scale_type: "manual_range"
+          y_axis_min: 0
+          y_axis_max: 10
+    ```
+
+    **Key `graph_24h_forecast_config` options:**
+    *   `base_font_size`: Controls the general font size for graph elements.
+    *   `graph_time_range_hours`: How many hours the graph should display.
+    *   `x_axis_hour_interval`, `x_axis_time_format`: Customize X-axis time ticks and labels.
+    *   `legend`: Configure either a standard legend or a `peak_value_display` that shows min/max values directly on the graph.
+    *   `wind_arrows`: Enable and style wind direction arrows on the graph.
+    *   `series`: A list defining each data series (line) to plot.
+        *   `parameter`: The weather data parameter (e.g., "temp", "wind_speed", "rain").
+        *   `axis_label`: Label for the Y-axis this series uses.
+        *   `axis`: Assigns the series to the "left" or "right" Y-axis.
+        *   `color`, `line_style`, `linewidth`: Visual styling.
+        *   `scale_type`: How the Y-axis for this series is scaled (`auto_padded` or `manual_range`).
+        *   `plot_type`: Can be set to `fill_between` for parameters like "rain" or "snow" to create an area fill.
+
+    Refer to the `config.defaults.yaml` (if available) or the full example in `config.yaml` for all available options and detailed comments.
 
 
 ## Customization
