@@ -89,22 +89,22 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
     *   **Supplemental Providers (Optional):**
         You can configure the script to fetch specific data points from providers other than your primary `weather_provider` and merge them into the main dataset. This is useful if your primary provider lacks certain parameters (like UV index from SMHI's point forecast).
 
-        Add a `supplemental_providers` key to your `config.json`. This should be a list of objects, each specifying a `provider_name` and a list of `parameters` to merge.
+        Add a `supplemental_providers` key to your `config.yaml`. This should be a list of mappings, each specifying a `provider_name` and a list of `parameters` to merge.
 
-        ```json
-        {
-          "...": "your primary config here",
-          "supplemental_providers": [
-            {
-              "provider_name": "open-meteo",
-              "parameters": ["uvi", "rain"]
-            },
-            {
-              "provider_name": "google",
-              "parameters": ["wind_speed"]
-            }
-          ]
-        }
+        Example:
+        ```yaml
+        # ... your primary config here ...
+        
+        supplemental_providers:
+          - provider_name: "open-meteo"
+            parameters:
+              - "uvi"
+              - "rain"
+          - provider_name: "google"
+            parameters:
+              - "wind_speed"
+        # Ensure you have credentials for these supplemental providers configured above
+        # if they require authentication (e.g., google_api_key for "google").
         ```
 
         **Available Parameters for Merging:**
