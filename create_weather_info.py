@@ -2,12 +2,12 @@
 import argparse
 import requests
 import json
-import os
+import os # Keep this os import
 from datetime import datetime, timedelta
 import hashlib
 import io
 import traceback
-
+import math
 # Third-party imports
 from PIL import Image, ImageDraw, ImageFont
 try:
@@ -19,8 +19,11 @@ except ImportError:
     LANCZOS_FILTER = Image.LANCZOS
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+from matplotlib.path import Path
+from matplotlib.transforms import Affine2D
 from IPy import IP
 import asyncio
+from datetime import timezone # <--- Add this import
 import sys
 import os
 
@@ -99,7 +102,7 @@ def download_and_cache_icon(icon_identifier, icon_cache_dir="icon_cache"):
 
 
 # --- create_24h_forecast_section ---
-def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height, font_path, font_size):
+def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height, font_path, font_size, show_wind_arrows):
     """Creates the 24-hour forecast section (graph) on the image."""
     global image # Need global image to paste onto
 
@@ -113,9 +116,10 @@ def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height,
         return
 
     # Extract data, handling potential missing keys
-    times = [datetime.fromtimestamp(h.get('dt', 0)) for h in hourly_forecast_data]
+    times = [datetime.fromtimestamp(h.get('dt', 0), tz=timezone.utc) for h in hourly_forecast_data]
     temps = [h.get('temp', 0.0) for h in hourly_forecast_data]
     winds = [h.get('wind_speed', 0.0) for h in hourly_forecast_data]
+    winds_deg = [h.get('wind_deg', 0) for h in hourly_forecast_data] # Extract wind direction
     rains = [h.get('rain', {}).get('1h', 0.0) for h in hourly_forecast_data]
 
     # Filter out potential bad timestamps (dt=0)
@@ -128,6 +132,7 @@ def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height,
     temps = [temps[i] for i in valid_indices]
     winds = [winds[i] for i in valid_indices]
     rains = [rains[i] for i in valid_indices]
+    winds_deg = [winds_deg[i] for i in valid_indices] # Filter wind direction consistently
 
     if not times: # Check again after filtering
         print("Warning: Insufficient valid data points after filtering for forecast graph.")
@@ -201,11 +206,47 @@ def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height,
     fig.tight_layout(pad=0.5) # Adjust padding around the plot
 
     # --- Save plot to buffer and paste ---
+    # Define a more pointy, arrow-like marker path (points right by default)
+    # Tip at (1.0, 0), Base at (-0.4, +/-0.4)
+    pointy_arrow_verts = [(1.0, 0.0), (-0.4, 0.4), (-0.4, -0.4), (1.0, 0.0)]
+    pointy_arrow_codes = [Path.MOVETO, Path.LINETO, Path.LINETO, Path.CLOSEPOLY]
+    pointy_arrow_base_path = Path(pointy_arrow_verts, pointy_arrow_codes)
     try:
+        # If wind arrows are enabled, plot them on ax2 (wind axis)
+        if show_wind_arrows and winds:
+            major_tick_locs = ax1.get_xticks()
+            # Ensure tick dates are UTC to match 'times'
+            major_tick_dates_utc = [mdates.num2date(loc).astimezone(timezone.utc) for loc in major_tick_locs]
+
+            for tick_date_utc in major_tick_dates_utc:
+                if not times: continue
+                # Find the hourly data point closest to this major tick time
+                # This ensures we get a data point that was actually plotted.
+                closest_time_utc = min(times, key=lambda x: abs(x - tick_date_utc))
+                idx_at_tick = -1
+                for i, t in enumerate(times):
+                    if t == closest_time_utc:
+                        idx_at_tick = i
+                        break
+                if idx_at_tick != -1:
+                    wind_speed_val = winds[idx_at_tick]
+                    wind_deg_val = winds_deg[idx_at_tick]
+                    marker_angle = (270 - wind_deg_val + 360) % 360 # Makes triangle point where wind blows
+
+                    # Create a rotated version of the custom pointy arrow path
+                    rotation_transform = Affine2D().rotate_deg(marker_angle)
+                    custom_rotated_marker = pointy_arrow_base_path.transformed(rotation_transform)
+
+                    ax2.plot(closest_time_utc, wind_speed_val,
+                             marker=custom_rotated_marker,
+                             linestyle='None', markersize=16, color='green', # Using navy for visibility
+                             markeredgecolor='black', clip_on=False) # clip_on=False to ensure visibility if at edge
+
         buf = io.BytesIO()
         plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
         plt.close(fig) # Close the plot to free memory
         buf.seek(0)
+
         plot_img = Image.open(buf).convert("RGBA")
 
         # Paste the plot onto the main image
@@ -216,7 +257,7 @@ def create_24h_forecast_section(draw, hourly_forecast_data, x, y, width, height,
 
 
 # --- create_weather_image signature and icon logic ---
-def create_weather_image(current_data, hourly_data, daily_data, output_path, icon_provider):
+def create_weather_image(current_data, hourly_data, daily_data, output_path, icon_provider, show_wind_arrows_in_graph):
     """
     Creates the weather forecast image (600x448, with graph).
     Uses specified icon_provider ('openweathermap' or 'google').
@@ -346,7 +387,7 @@ def create_weather_image(current_data, hourly_data, daily_data, output_path, ico
     hourly_forecast_width = image_width - current_weather_width - 15
     create_24h_forecast_section(
         draw, hourly_data[:24], hourly_forecast_x, hourly_forecast_y,
-        hourly_forecast_width, hourly_forecast_height, font_path, graph_font_size
+        hourly_forecast_width, hourly_forecast_height, font_path, graph_font_size, show_wind_arrows_in_graph
     )
 
     # --- Daily Forecast Section ---
@@ -499,9 +540,10 @@ async def main():
     hourly = provider.get_hourly_data()
     daily = provider.get_daily_data()
 
+    show_wind_arrows_cfg = config.get("show_wind_direction_arrows", False)
     # --- Create Image ---
     # Pass the icon_provider setting
-    img = create_weather_image(current, hourly, daily, output_image_path, icon_provider)
+    img = create_weather_image(current, hourly, daily, output_image_path, icon_provider, show_wind_arrows_cfg)
     if img is None:
         print("Failed to create weather image. Exiting.")
         exit(1)
