@@ -5,11 +5,12 @@ class WeatherData:
     """
     Parses and prepares raw weather data for display.
     """
-    def __init__(self, current_raw, hourly_raw, daily_raw, icon_provider_preference):
+    def __init__(self, current_raw, hourly_raw, daily_raw, icon_provider_preference, graph_config=None):
         self.current_raw = current_raw if current_raw is not None else {}
         self.hourly_raw = hourly_raw if hourly_raw is not None else []
         self.daily_raw = daily_raw if daily_raw is not None else []
         self.icon_provider_preference = icon_provider_preference.lower()
+        self.graph_config = graph_config if graph_config is not None else {}
 
         self.current = self._parse_current_weather()
         self.hourly = self._parse_hourly_forecast()
@@ -60,8 +61,9 @@ class WeatherData:
         parsed_hourly = []
         if not self.hourly_raw:
             return []
-            
-        for h_data in self.hourly_raw[:24]: # Graph typically shows up to 24 hours
+
+        hours_to_display = self.graph_config.get('graph_time_range_hours', 24)
+        for h_data in self.hourly_raw[:hours_to_display]:
             dt_val = h_data.get('dt', 0)
             # Ensure dt_val is a valid timestamp before conversion
             try:
@@ -79,18 +81,34 @@ class WeatherData:
                 # print(f"Warning: Skipping hourly data point with year <= 1970: {dt_obj}")
                 continue
 
+            # Ensure rain and snow are numeric or None
+            rain_val = h_data.get('rain')
+            if isinstance(rain_val, dict):
+                rain_val = rain_val.get('1h') # Common key for 1-hour accumulation
+
+            snow_val = h_data.get('snow')
+            if isinstance(snow_val, dict):
+                snow_val = snow_val.get('1h') # Common key for 1-hour accumulation
+
             entry = {
                 'dt': dt_obj,
-                'temp': h_data.get('temp', 0.0),
-                'wind_speed': h_data.get('wind_speed', 0.0),
-                'wind_deg': h_data.get('wind_deg', 0),
-                'rain': h_data.get('rain', {}).get('1h', 0.0)
+                'temp': h_data.get('temp'), # Will be None if missing
+                'feels_like': h_data.get('feels_like'),
+                'humidity': h_data.get('humidity'),
+                'uvi': h_data.get('uvi'),
+                'wind_speed': h_data.get('wind_speed'),
+                'wind_deg': h_data.get('wind_deg'), # Still needed for arrows
+                # Provider adapters should aim to place 'rain' and 'snow' as direct numeric values.
+                # This parser now also attempts to extract '1h' if they are dicts.
+                'rain': rain_val,
+                'snow': snow_val
             }
             parsed_hourly.append(entry)
         return parsed_hourly
 
     def _parse_daily_forecast(self):
         parsed_daily = []
+
         if not self.daily_raw:
             return []
 
@@ -118,4 +136,3 @@ class WeatherData:
             
             parsed_daily.append(entry)
         return parsed_daily
-

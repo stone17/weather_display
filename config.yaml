@@ -42,3 +42,125 @@ cache_duration_minutes: 10 # Duration in minutes for how long to cache weather d
 
 # Optional: Show wind direction arrows on the 24h forecast graph
 # show_wind_direction_arrows: true
+#
+# Configuration for the 24-hour forecast graph
+graph_24h_forecast_config:
+  # --- General Graph Appearance ---
+  base_font_size: 10 # Base font size for graph text elements (ticks, labels)
+  show_y_grid_left: false # Show grid lines for the left Y-axis
+  show_y_grid_right: true
+  graph_time_range_hours: 24 # Number of hours to display on the forecast graph (e.g., 24, 48)
+
+  # --- X-Axis Configuration ---
+  x_axis_hour_interval: 6   # Show ticks every N hours (e.g., 3, 4, 6)
+  x_axis_time_format: "%H"  # Time format for X-axis labels (e.g., "%H:%M", "%H")
+  x_axis_tick_rotation: 0   # Rotation angle for X-axis tick labels
+
+  # --- Legend Configuration ---
+  legend:
+    # Standard legend (used if peak_value_display is not enabled or fails)
+    standard_legend:
+      enabled: false # Set to false if you only want peak_value_display
+      position: "bottom"  # "bottom", "top", "best", or any valid Matplotlib loc string
+      columns: 3          # Number of columns in the legend
+      fontsize: 9         # Specific font size for legend text
+
+    # Peak value display (renders text directly on graph, e.g., "Wind: 10.5 m/s")
+    # If enabled, it typically replaces the standard_legend.
+    peak_value_display:
+      enabled: true
+      location: "in_graph"  # Changed to "in_graph"
+      layering: "in_front"  # Options: "in_front", "behind" (of plot lines)
+      start_anchor_y: 0.97          # Y position for the first line of text (0.0 bottom to 1.0 top)
+      horizontal_alignment: 'right' # 'left', 'right', 'center' for the text block
+      vertical_alignment_per_line: 'top' # 'top', 'center', 'bottom' for each text line relative to its y_pos
+      font_size: 9
+      line_y_step: 0.075            # Vertical step for the next line, in fraction of axes height (e.g., 0.06 means 6% down)
+      text_bbox:                  # Bounding box style for each text line
+        enabled: true
+        face_color: "white"
+        alpha: 0.75
+        edge_color: "none"        # Use "none" or a light color like "lightgrey"
+        boxstyle: "round,pad=0.3" # Matplotlib boxstyle string (e.g., "round,pad=0.3", "square,pad=0.2")
+  
+  # --- Wind Arrow Configuration (on graph) ---
+  wind_arrows:
+    enabled: true
+    parameter_speed: "wind_speed"    # Parameter name in hourly data for wind speed
+    parameter_degrees: "wind_deg"  # Parameter name in hourly data for wind direction
+    color: "darkgreen"               # Color of the arrow
+    edge_color: "black"            # Edge color of the arrow
+    size: 12                         # Size of the arrow marker
+
+  # List of series to display on the graph.
+  series:
+    - parameter: "temp"  # Must be one of the values from 'parameter_list'
+      axis_label: "Temperature (C)"  # Text for this series' Y-axis. Empty means no label.
+      legend_label: ""  # Text for legend. Falls back to parameter name if empty.
+      axis_label_side: "left"    # Optional: "left" or "right". Side for axis_label text relative to its spine. Defaults to series.axis.
+      axis: "right"       # Assign to "left" or "right" Y-axis.
+      color: "#FF6347"   # Tomato red. Example: CSS color name or hex code.
+      line_style: "solid" # Options: "solid", "dashed", "dotted", "dashdot", etc.
+      linewidth: 2        # Width of the line
+      # scale_type: Defines how the parameter's data is treated for Y-axis scaling.
+      #   "auto_padded": Y-axis auto-scales based on data min/max, with padding defined by 'data_occupancy_factor'.
+      #                  Data range will occupy 'data_occupancy_factor' of the axis.
+      #   "manual_range": Y-axis scale is controlled by 'y_axis_min' and/or 'y_axis_max'.
+      #                   If both are set, scale is fixed. If one is set, other end auto-scales with padding.
+      #                   If neither, auto-scales from data min/max with default padding.
+      show_y_axis_ticks: true       # Default: true. Show Y-axis ticks for this series.
+      show_y_axis_tick_labels: true # Default: true. Show Y-axis tick labels (numbers) for this series.
+      scale_type: "auto_padded"     # Example: Temperature auto-scales with specified padding
+      data_occupancy_factor: 0.8  # Data will take up 80% of its Y-axis range, 10% padding top/bottom
+      # y_axis_min: 5               # Example if using manual_range
+      # y_axis_max: 20              # Example if using manual_range
+
+    - parameter: "wind_speed"
+      axis_label: ""   # Y-axis label for wind
+      legend_label: "Wind" # Legend label for wind
+      axis: "left"
+      color: "#32CD32"   # Lime green
+      show_peak_in_legend: true
+      unit: "m/s"
+      line_style: "dashed"
+      linewidth: 2
+      show_y_axis_ticks: false       # Example: Hide ticks for wind
+      show_y_axis_tick_labels: false # Example: Hide tick labels for wind
+      scale_type: "manual_range"
+      y_axis_min: 0                # Wind speed starts at 0
+      y_axis_max: 25               # Max wind speed for this axis
+
+    - parameter: "rain"
+      axis_label: ""             # Example: No Y-axis label for rain
+      legend_label: "Rain"   # Legend label for rain
+      axis: "left"
+      color: "#1E90FF"   # Dodger blue
+      show_peak_in_legend: true
+      unit: "mm"
+      plot_type: "fill_between" # Special plot type for area fill
+      alpha: 0.4                # Alpha transparency for fill_between
+      linewidth: 1              # Linewidth for the edge of the fill
+      show_y_axis_ticks: false       # Example: Hide ticks for rain
+      show_y_axis_tick_labels: false # Example: Hide tick labels for rain
+      scale_type: "manual_range"
+      y_axis_min: 0.01                # Rain starts at 0
+      y_axis_max: 10               # Max rain for this axis
+
+    # Example for snow (if data is available from provider)
+    # - parameter: "snow"
+    #   # label: "Snow" # REMOVED
+    #   axis_label: "Snow (mm)"
+    #   legend_label: "Snowfall"
+    #   axis_label_side: "right"
+    #   axis: "right"
+    #   color: "#ADD8E6" # Light blue
+    #   show_peak_in_legend: true
+    #   unit: "mm"
+    #   plot_type: "fill_between"
+    #   alpha: 0.5
+    #   linewidth: 1
+    #   show_y_axis_ticks: true
+    #   show_y_axis_tick_labels: true
+    #   scale_type: "manual_range"
+    #   y_axis_min: 0
+    #   y_axis_max: 5 # Example max snow

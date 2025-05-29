@@ -128,7 +128,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 *   **Display Issues:** Double-check the wiring between the ESP32 and the e-Paper display. Ensure the correct Waveshare firmware is flashed and running.
 *   **Network Errors:** Verify your ESP32 is connected to your WiFi network. Confirm the `server_ip` in `config.json` matches the ESP32's actual IP address. Check firewall settings if applicable.
 *   **API Errors:**
-    *   Verify the API key/credentials in `config.json` for your selected `weather_provider` are correct and active.
+    *   Verify the API key/credentials in `config.yaml` for your selected `weather_provider` are correct and active.
     *   Check the script output for specific error messages from the provider (e.g., 401 Unauthorized, 403 Forbidden, 429 Rate Limit).
     *   Consult the documentation for your chosen weather provider regarding API limits and potential costs (especially Google Weather).
     *   Check the status page of the weather provider if errors persist.
