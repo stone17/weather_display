@@ -30,6 +30,7 @@ import os
 # Local application imports
 import upload
 
+import yaml # Import the YAML library
 # Adjust Python path to correctly handle relative imports when running this script directly
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
@@ -494,27 +495,52 @@ def create_weather_image(current_data, hourly_data, daily_data, output_path, ico
 # --- Main Execution ---
 async def main():
     # Use the globally defined project_root for the default config path
-    default_config_path = os.path.join(project_root, "config.json")
+    base_config_path = os.path.join(project_root, "config.yaml")
+    local_config_path = os.path.join(project_root, "config.local.yaml") # Path for local/private config
 
     parser = argparse.ArgumentParser(description="Create and optionally upload a weather display image.")
     parser.add_argument(
         "--config",
         dest="config_path",
-        default=default_config_path,
-        help=f"Path to the configuration JSON file (default: {default_config_path})"
+        default=base_config_path, # Default to the base config path
+        help=f"Path to the base configuration YAML file (default: {base_config_path}). A 'config.local.yaml' in the same directory will also be loaded if present."
     )
     args = parser.parse_args()
 
     output_image_path = os.path.join(project_root, "weather_forecast_graph.png")
 
+    config = {}
 
     # --- Load Config ---
+    # Load base configuration (e.g., config.yaml)
     try:
         print(f"Loading configuration from: {args.config_path}")
         with open(args.config_path, "r") as config_file:
-            config = json.load(config_file)
-    except (FileNotFoundError, json.JSONDecodeError) as e:
-        print(f"Error loading configuration file '{args.config_path}': {e}")
+            base_cfg = yaml.safe_load(config_file)
+            if base_cfg:
+                config.update(base_cfg)
+    except (FileNotFoundError, yaml.YAMLError) as e: # Catch yaml.YAMLError
+        print(f"Error loading YAML configuration file '{args.config_path}': {e}")
+        exit(1)
+
+    # Load and merge local/secret configuration (e.g., config.local.yaml)
+    try:
+        if os.path.exists(local_config_path):
+            print(f"Loading local configuration from: {local_config_path}")
+            with open(local_config_path, "r") as local_config_file:
+                local_cfg = yaml.safe_load(local_config_file)
+                if local_cfg:
+                    # Simple dictionary update, for deeply nested dicts you might need a recursive merge
+                    config.update(local_cfg)
+        else:
+            print(f"Local configuration file not found: {local_config_path}. Proceeding with base config.")
+    except (FileNotFoundError, yaml.YAMLError) as e:
+        print(f"Error loading local YAML configuration file '{local_config_path}': {e}")
+        # Decide if this is a fatal error or just a warning
+        # exit(1)
+
+    if not config:
+        print("No configuration loaded. Exiting.")
         exit(1)
 
     # --- Get Icon Provider Setting ---

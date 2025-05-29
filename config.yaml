@@ -1,0 +1,44 @@
+# c:\Toolz\weather_display\config.yaml
+latitude: 51.5074  # London Latitude
+longitude: -0.1278 # London Longitude
+server_ip: "192.168.1.18" # Enclosed in quotes if it might be misinterpreted
+weather_provider: "smhi"
+icon_provider: "openweathermap"
+
+# Optional: List of supplemental weather data providers
+supplemental_providers:
+  - provider_name: "open-meteo"
+    parameters:
+      - "uvi"
+#  - provider_name: "another-provider" # Example of another supplemental provider
+#    parameters: ["param1", "param2"]
+
+# List of all available weather providers in the system
+provider_list:
+  - "open-meteo"
+  - "openweathermap"
+  - "meteomatics"
+  - "google"
+  - "smhi"
+
+# List of all parameters the system might try to fetch
+parameter_list:
+  - "temp"
+  - "feels_like"
+  - "humidity"
+  - "uvi"
+  - "wind_speed"
+  - "rain"
+  - "snow"
+
+# API Keys and Credentials - REPLACE WITH YOUR ACTUAL VALUES in a local/private config or environment variables
+google_api_key: "YOUR_GOOGLE_API_KEY_HERE"
+openweathermap_api_key: "YOUR_OPENWEATHERMAP_API_KEY_HERE"
+meteomatics_username: "YOUR_METEOMATICS_USERNAME_HERE"
+meteomatics_password: "YOUR_METEOMATICS_PASSWORD_HERE"
+
+# Cache settings
+cache_duration_minutes: 10 # Duration in minutes for how long to cache weather data
+
+# Optional: Show wind direction arrows on the 24h forecast graph
+# show_wind_direction_arrows: true

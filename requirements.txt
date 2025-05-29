@@ -3,3 +3,4 @@ Pillow
 matplotlib
 pysmhi
 aiohttp
+PyYAML
