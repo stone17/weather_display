@@ -34,6 +34,7 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
                         'current': {}, 'hourly': [], 'daily': []}
     if smhi_hourly:
         for hour_fc in smhi_hourly:
+            print(hour_fc)
             hour_dict = hour_fc.__dict__ if hasattr(hour_fc, '__dict__') else hour_fc
             ts = int(hour_dict.get('valid_time', datetime.now(timezone.utc)).timestamp())
             temp = hour_dict.get('temperature', 0.0)

@@ -83,11 +83,21 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         owm_icon = METEOMATICS_TO_OWM_ICON.get(symbol_idx, 'na')
         description = METEOMATICS_SYMBOL_DESC.get(symbol_idx, 'Unknown')
         hourly_list.append({
-            'dt': int(ts_dt.timestamp()), 'temp': temp, 'feels_like': temp, 'pressure': 1013.0,
-            'humidity': 50, 'dew_point': 0, 'uvi': float(get_value_at_ts(uv_param, ts_dt, 0.0)),
-            'clouds': 50, 'visibility': 10000, 'wind_speed': float(get_value_at_ts(wind_speed_param, ts_dt, 0.0)),
-            'wind_deg': 0, 'wind_gust': 0.0, 'weather': [{'id': symbol_idx, 'main': description.split()[0],
-            'description': description, 'icon': owm_icon}], 'rain': {'1h': float(get_value_at_ts(precip_1h_param, ts_dt, 0.0))}
+            'dt': int(ts_dt.timestamp()),
+            'temp': temp,
+            'feels_like': temp,
+            'pressure': 1013.0,
+            'humidity': 50,
+            'dew_point': 0,
+            'uvi': float(get_value_at_ts(uv_param, ts_dt, 0.0)),
+            'clouds': 50,
+            'visibility': 10000,
+            'wind_speed': float(get_value_at_ts(wind_speed_param, ts_dt, 0.0)),
+            'wind_deg': 0,
+            'wind_gust': float(get_value_at_ts(wind_gust_24h_param, ts_dt, 0.0)),
+            'weather': [{'id': symbol_idx, 'main': description.split()[0],
+            'description': description, 'icon': owm_icon}],
+            'rain': {'1h': float(get_value_at_ts(precip_1h_param, ts_dt, 0.0))}
         })
     if hourly_list:
         transformed_data['current'] = hourly_list[0].copy()

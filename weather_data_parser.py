@@ -97,9 +97,8 @@ class WeatherData:
                 'humidity': h_data.get('humidity'),
                 'uvi': h_data.get('uvi'),
                 'wind_speed': h_data.get('wind_speed'),
-                'wind_deg': h_data.get('wind_deg'), # Still needed for arrows
-                # Provider adapters should aim to place 'rain' and 'snow' as direct numeric values.
-                # This parser now also attempts to extract '1h' if they are dicts.
+                'wind_deg': h_data.get('wind_deg'),
+                'wind_gust': h_data.get('wind_gust'),
                 'rain': rain_val,
                 'snow': snow_val
             }

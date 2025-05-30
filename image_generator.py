@@ -140,10 +140,17 @@ def create_24h_forecast_section(
     # ax_right = None # Will be managed differently
     left_axis_series_configs, right_axis_series_configs = [], []
     left_axis_used, right_axis_used = False, False
+    processed_series_data = {} # To store data of plotted series for reuse by fills
+    deferred_fill_between_two_series_configs = [] # Store configs for fills between two other series
 
     for series_cfg in graph_plot_config.get('series', []):
+        # Check for the new fill_between_two_series type first
+        if series_cfg.get('plot_type') == 'fill_between_two_series':
+            deferred_fill_between_two_series_configs.append(series_cfg)
+            continue # This series type doesn't plot its own line from a 'parameter'
+
         param_name = series_cfg.get('parameter')
-        if not param_name: continue
+        if not param_name: continue # Skip if no parameter defined (and not a special type like above)
 
         values = [h.get(param_name) for h in parsed_hourly_data]
         series_times_filtered, series_values_filtered = [], []
@@ -159,10 +166,18 @@ def create_24h_forecast_section(
         series_data_package = {'config': series_cfg, 'times': series_times_filtered, 'values': series_values_filtered}
         if series_cfg.get('axis') == 'left':
             left_axis_series_configs.append(series_data_package)
+            # Store processed data for potential use in fill_between_areas
+            processed_series_data[param_name] = {
+                'times': series_times_filtered, 'values': series_values_filtered, 'config': series_cfg
+            }
             left_axis_used = True
         elif series_cfg.get('axis') == 'right':
             # if ax_right is None: ax_right = ax_primary_left.twinx() # Logic moved
             right_axis_series_configs.append(series_data_package)
+            # Store processed data
+            processed_series_data[param_name] = {
+                'times': series_times_filtered, 'values': series_values_filtered, 'config': series_cfg
+            }
             right_axis_used = True
 
     # --- Axis Creation, Plotting, and Scaling ---
@@ -283,6 +298,7 @@ def create_24h_forecast_section(
 
         plotted_axes_info.append({'ax': current_ax, 'config': cfg, 'parameter': cfg.get('parameter')})
 
+
     # Process Right Axis Series
     is_first_on_right = True
     ax_primary_right = None # Initialize primary right axis
@@ -294,6 +310,8 @@ def create_24h_forecast_section(
             current_ax = ax_primary_right
             is_first_on_right = False
         else:
+            if not ax_primary_right: # Should not happen if right_axis_series_configs is not empty
+                ax_primary_right = ax_primary_left.twinx()
             current_ax = ax_primary_left.twinx()
             current_ax.spines["right"].set_position(("outward", right_spine_offset))
             current_ax.spines["left"].set_visible(False) # Hide the default left spine
@@ -391,10 +409,61 @@ def create_24h_forecast_section(
             current_ax.set_yticklabels([]) # Explicitly clear
 
         plotted_axes_info.append({'ax': current_ax, 'config': cfg, 'parameter': cfg.get('parameter')})
+        # Update processed_series_data with the axis object for this series
+        if cfg.get('parameter') in processed_series_data:
+            processed_series_data[cfg.get('parameter')]['axis'] = current_ax
+
+    # Update axis information in processed_series_data after all axes are created
+    for ax_info in plotted_axes_info:
+        param_name = ax_info['parameter']
+        if param_name in processed_series_data:
+            processed_series_data[param_name]['axis'] = ax_info['ax']
 
     if not left_axis_used: ax_primary_left.set_yticks([]); ax_primary_left.set_yticklabels([]) # Clear if no data was ever on left
     if not right_axis_used and ax_primary_right: ax_primary_right.set_visible(False) # Hide primary right if not used
     elif not right_axis_used and not ax_primary_right: pass # No right axis was created
+
+    # --- Fill Between Areas ---
+    # The old 'fill_between_areas' top-level config is removed.
+    # Now process the deferred 'fill_between_two_series' plot types.
+    for fill_cfg in deferred_fill_between_two_series_configs:
+        # These keys are specific to 'fill_between_two_series' plot type
+        series1_param_name = fill_cfg.get('series1_param_name')
+        series2_param_name = fill_cfg.get('series2_param_name')
+        fill_color = fill_cfg.get('color', 'gray')
+        fill_alpha = fill_cfg.get('alpha', 0.3)
+        fill_zorder = fill_cfg.get('zorder', 1.8) # Default below lines
+
+        if not series1_param_name or not series2_param_name:
+            print(f"Warning: Skipping 'fill_between_two_series' due to missing series1_param_name or series2_param_name: {fill_cfg}")
+            continue
+        if series1_param_name not in processed_series_data or series2_param_name not in processed_series_data:
+            print(f"Warning: Data for one or both params ('{series1_param_name}', '{series2_param_name}') not found in processed_series_data for 'fill_between_two_series'. Ensure they are defined as regular series. Skipping.")
+            continue
+
+        data1 = processed_series_data[series1_param_name]
+        data2 = processed_series_data[series2_param_name]
+
+        if not data1.get('axis') or not data2.get('axis'):
+            print(f"Warning: Axis information missing for '{series1_param_name}' or '{series2_param_name}'. Skipping fill.")
+            continue
+
+        # Align data to common timestamps
+        dict1_lookup = {dt: val for dt, val in zip(data1['times'], data1['values'])}
+        dict2_lookup = {dt: val for dt, val in zip(data2['times'], data2['values'])}
+        common_timestamps = sorted(list(set(data1['times']) & set(data2['times'])))
+
+        if not common_timestamps:
+            print(f"Warning: No common timestamps for '{series1_param_name}' and '{series2_param_name}'. Skipping fill.")
+            continue
+
+        aligned_values1 = [dict1_lookup[ts] for ts in common_timestamps]
+        aligned_values2 = [dict2_lookup[ts] for ts in common_timestamps]
+
+        target_axis = data1['axis'] # Plot fill on the axis of the first parameter
+        target_axis.fill_between(common_timestamps, aligned_values1, aligned_values2, 
+                                 color=fill_color, alpha=fill_alpha, zorder=fill_zorder, interpolate=True) # interpolate=True is good
+        print(f"Filled area between '{series1_param_name}' and '{series2_param_name}'.")
 
     # Common X-axis settings (apply to the base axis, ax_primary_left)
     all_plotted_times = [t for s_list in (left_axis_series_configs, right_axis_series_configs) for s_data in s_list for t in s_data['times']]

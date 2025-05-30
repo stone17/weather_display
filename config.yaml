@@ -128,13 +128,37 @@ graph_24h_forecast_config:
       color: "#32CD32"   # Lime green
       show_peak_in_legend: true
       unit: "m/s"
-      line_style: "dashed"
-      linewidth: 2
+      line_style: "solid"
+      linewidth: 1.5
       show_y_axis_ticks: false       # Example: Hide ticks for wind
       show_y_axis_tick_labels: false # Example: Hide tick labels for wind
       scale_type: "manual_range"
       y_axis_min: 0                # Wind speed starts at 0
       y_axis_max: 25               # Max wind speed for this axis
+
+    - parameter: "wind_gust"
+      axis_label: ""   # Y-axis label for wind
+      legend_label: "" # Legend label for wind
+      axis: "left"
+      color: "#32CD32"   # Lime green
+      show_peak_in_legend: false
+      unit: "m/s"
+      line_style: "dashed"
+      linewidth: 0.1
+      show_y_axis_ticks: false       # Example: Hide ticks for wind
+      show_y_axis_tick_labels: false # Example: Hide tick labels for wind
+      scale_type: "manual_range"
+      y_axis_min: 0                # Wind speed starts at 0
+      y_axis_max: 25               # Max wind speed for this axis
+
+    # New entry for filling between wind_speed and wind_gust
+    # This series type does not use 'parameter', 'axis_label', 'legend_label' for its own line.
+    - plot_type: "fill_between_two_series"
+      series1_param_name: "wind_speed"    # Parameter name of the first series
+      series2_param_name: "wind_gust"     # Parameter name of the second series
+      color: "lightgreen"                 # Color of the fill
+      alpha: 0.4                          # Opacity of the fill
+      zorder: 1.8                         # Drawing order (lines are typically 2.0)
 
     - parameter: "rain"
       axis_label: ""             # Example: No Y-axis label for rain
