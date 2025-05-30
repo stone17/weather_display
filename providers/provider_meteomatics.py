@@ -50,10 +50,15 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
     if not all_timestamps: return None
     sorted_timestamps = sorted(list(all_timestamps))
 
-    temp_param = 't_2m:C'; wind_speed_param = 'wind_speed_10m:ms'; precip_1h_param = 'precip_1h:mm'
-    symbol_1h_param = 'weather_symbol_1h:idx'; uv_param = 'uv:idx'
-    temp_max_24h_param = 't_max_2m_24h:C'; temp_min_24h_param = 't_min_2m_24h:C'
-    precip_24h_param = 'precip_24h:mm'; symbol_24h_param = 'weather_symbol_24h:idx'
+    temp_param = 't_2m:C'
+    wind_speed_param = 'wind_speed_10m:ms'
+    precip_1h_param = 'precip_1h:mm'
+    symbol_1h_param = 'weather_symbol_1h:idx'
+    uv_param = 'uv:idx'
+    temp_max_24h_param = 't_max_2m_24h:C'
+    temp_min_24h_param = 't_min_2m_24h:C'
+    precip_24h_param = 'precip_24h:mm'
+    symbol_24h_param = 'weather_symbol_24h:idx'
     wind_gust_24h_param = 'wind_gusts_10m_24h:ms'
 
     if not all(p in param_map for p in [temp_param, wind_speed_param, precip_1h_param, symbol_1h_param]):
@@ -71,7 +76,8 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
     hourly_list = []
     for ts_dt in sorted_timestamps:
         temp_val = get_value_at_ts(temp_param, ts_dt)
-        if temp_val is None: continue
+        if temp_val is None:
+            continue
         temp = float(temp_val)
         symbol_idx = int(get_value_at_ts(symbol_1h_param, ts_dt, 0))
         owm_icon = METEOMATICS_TO_OWM_ICON.get(symbol_idx, 'na')

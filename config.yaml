@@ -46,7 +46,11 @@ cache_duration_minutes: 10 # Duration in minutes for how long to cache weather d
 # Configuration for the 24-hour forecast graph
 graph_24h_forecast_config:
   # --- General Graph Appearance ---
-  base_font_size: 10 # Base font size for graph text elements (ticks, labels)
+  base_font_size: 11 # Base font size for graph text elements (ticks, labels)
+  y_axis_label_font_weight: "bold"    # [bold or normal] For Y-axis titles like "Temperature"
+  x_axis_tick_font_weight: "bold"     # For X-axis time labels like "00h"
+  y_axis_tick_font_weight: "bold"     # For Y-axis value labels like "10", "20"
+
   show_y_grid_left: false # Show grid lines for the left Y-axis
   show_y_grid_right: true
   graph_time_range_hours: 24 # Number of hours to display on the forecast graph (e.g., 24, 48)
@@ -64,6 +68,7 @@ graph_24h_forecast_config:
       position: "bottom"  # "bottom", "top", "best", or any valid Matplotlib loc string
       columns: 3          # Number of columns in the legend
       fontsize: 9         # Specific font size for legend text
+      font_weight: "bold" # Font weight for legend text (e.g., "bold", "normal")
 
     # Peak value display (renders text directly on graph, e.g., "Wind: 10.5 m/s")
     # If enabled, it typically replaces the standard_legend.
@@ -74,8 +79,9 @@ graph_24h_forecast_config:
       start_anchor_y: 0.97          # Y position for the first line of text (0.0 bottom to 1.0 top)
       horizontal_alignment: 'right' # 'left', 'right', 'center' for the text block
       vertical_alignment_per_line: 'top' # 'top', 'center', 'bottom' for each text line relative to its y_pos
-      font_size: 9
-      line_y_step: 0.075            # Vertical step for the next line, in fraction of axes height (e.g., 0.06 means 6% down)
+      font_size: 10
+      font_weight: "bold"
+      line_y_step: 0.085            # Vertical step for the next line, in fraction of axes height (e.g., 0.06 means 6% down)
       text_bbox:                  # Bounding box style for each text line
         enabled: true
         face_color: "white"
@@ -95,7 +101,7 @@ graph_24h_forecast_config:
   # List of series to display on the graph.
   series:
     - parameter: "temp"  # Must be one of the values from 'parameter_list'
-      axis_label: "Temperature (C)"  # Text for this series' Y-axis. Empty means no label.
+      axis_label: "Temp. (C)"  # Text for this series' Y-axis. Empty means no label.
       legend_label: ""  # Text for legend. Falls back to parameter name if empty.
       axis_label_side: "left"    # Optional: "left" or "right". Side for axis_label text relative to its spine. Defaults to series.axis.
       axis: "right"       # Assign to "left" or "right" Y-axis.
@@ -144,7 +150,7 @@ graph_24h_forecast_config:
       show_y_axis_tick_labels: false # Example: Hide tick labels for rain
       scale_type: "manual_range"
       y_axis_min: 0.01                # Rain starts at 0
-      y_axis_max: 10               # Max rain for this axis
+      y_axis_max: 2               # Max rain for this axis
 
     # Example for snow (if data is available from provider)
     # - parameter: "snow"

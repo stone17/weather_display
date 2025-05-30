@@ -131,6 +131,11 @@ def create_24h_forecast_section(
         axis_label_font_size = 10 # Fallback sizes
         tick_label_font_size = 9
 
+    # Extract font weight settings from graph_plot_config for axis labels and ticks
+    y_axis_label_fw = graph_plot_config.get('y_axis_label_font_weight', 'normal')
+    x_axis_tick_fw = graph_plot_config.get('x_axis_tick_font_weight', 'normal')
+    y_axis_tick_fw = graph_plot_config.get('y_axis_tick_font_weight', 'normal')
+
     fig, ax_primary_left = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
     # ax_right = None # Will be managed differently
     left_axis_series_configs, right_axis_series_configs = [], []
@@ -255,12 +260,14 @@ def create_24h_forecast_section(
             series_plot_side = cfg.get('axis', 'left') # Where the series' spine is (left/right of graph)
             label_text_actual_side = cfg.get('axis_label_side', series_plot_side) # left/right of its own spine
             current_ax.yaxis.set_label_position(label_text_actual_side)
-            current_ax.set_ylabel(y_axis_text_for_series, color=cfg.get('color', 'black'), fontsize=axis_label_font_size)
+            current_ax.set_ylabel(y_axis_text_for_series, color=cfg.get('color', 'black'), fontsize=axis_label_font_size, fontweight=y_axis_label_fw)
         else:
             current_ax.set_ylabel('') # Explicitly set to empty if not provided or configured empty
-        
-        current_ax.tick_params(axis='y', labelcolor=cfg.get('color', 'black'), labelsize=tick_label_font_size)
 
+        current_ax.tick_params(axis='y', labelcolor=cfg.get('color', 'black'), labelsize=tick_label_font_size)
+        # Apply fontweight to y-tick labels individually
+        for label in current_ax.get_yticklabels():
+            label.set_fontweight(y_axis_tick_fw)
         # Handle tick visibility for this series' axis
         show_ticks = cfg.get('show_y_axis_ticks', True)
         show_tick_labels = cfg.get('show_y_axis_tick_labels', True)
@@ -363,12 +370,13 @@ def create_24h_forecast_section(
             series_plot_side = cfg.get('axis', 'right') # Where the series' spine is (left/right of graph)
             label_text_actual_side = cfg.get('axis_label_side', series_plot_side) # left/right of its own spine
             current_ax.yaxis.set_label_position(label_text_actual_side)
-            current_ax.set_ylabel(y_axis_text_for_series, color=cfg.get('color', 'black'), fontsize=axis_label_font_size)
+            current_ax.set_ylabel(y_axis_text_for_series, color=cfg.get('color', 'black'), fontsize=axis_label_font_size, fontweight=y_axis_label_fw)
         else:
             current_ax.set_ylabel('') # Explicitly set to empty if not provided or configured empty
-
         current_ax.tick_params(axis='y', labelcolor=cfg.get('color', 'black'), labelsize=tick_label_font_size)
-
+        # Apply fontweight to y-tick labels individually
+        for label in current_ax.get_yticklabels():
+            label.set_fontweight(y_axis_tick_fw)
         # Handle tick visibility for this series' axis
         show_ticks = cfg.get('show_y_axis_ticks', True)
         show_tick_labels = cfg.get('show_y_axis_tick_labels', True)
@@ -403,7 +411,7 @@ def create_24h_forecast_section(
     ax_primary_left.xaxis.set_major_locator(mdates.HourLocator(byhour=range(0, 24, graph_plot_config.get('x_axis_hour_interval', 6))))
     ax_primary_left.xaxis.set_major_formatter(mdates.DateFormatter(graph_plot_config.get('x_axis_time_format', '%H:%M')))
     ax_primary_left.set_xlim(left=start_tick_time, right=max_time_overall + timedelta(minutes=30))
-    plt.xticks(rotation=graph_plot_config.get('x_axis_tick_rotation', 0), ha="center", fontsize=tick_label_font_size)
+    plt.xticks(rotation=graph_plot_config.get('x_axis_tick_rotation', 0), ha="center", fontsize=tick_label_font_size, fontweight=x_axis_tick_fw)
     ax_primary_left.grid(True, which='major', axis='x', linestyle='-', color='grey', alpha=0.3)
     
     # Y-Grids (apply to primary axes only to avoid clutter)
@@ -418,6 +426,10 @@ def create_24h_forecast_section(
     peak_display_cfg = legend_main_cfg.get('peak_value_display', {})
     standard_legend_cfg = legend_main_cfg.get('standard_legend', {})
     
+    # Font weights for legends
+    peak_legend_fw = peak_display_cfg.get('font_weight', 'normal')
+    std_legend_fw = standard_legend_cfg.get('font_weight', 'normal')
+
     peak_display_enabled = peak_display_cfg.get('enabled', False)
     standard_legend_initially_enabled = standard_legend_cfg.get('enabled', True)
     use_standard_legend = standard_legend_initially_enabled and not peak_display_enabled
@@ -487,6 +499,7 @@ def create_24h_forecast_section(
                          transform=fig.transFigure,
                          color=cfg.get('color', 'black'),
                          fontsize=font_size,
+                         fontweight=peak_legend_fw,
                          ha=h_align,
                          va=v_align_line, # Vertical alignment for the text line itself
                          bbox=current_bbox_props)
@@ -499,6 +512,7 @@ def create_24h_forecast_section(
                                      transform=ax_primary_left.transAxes,
                                      color=cfg.get('color', 'black'),
                                      fontsize=font_size,
+                                     fontweight=peak_legend_fw,
                                      ha=h_align,
                                      va=v_align_line,
                                      bbox=current_bbox_props,
@@ -517,15 +531,16 @@ def create_24h_forecast_section(
             ncol = standard_legend_cfg.get('columns', len(handles))
             l_fontsize = standard_legend_cfg.get('fontsize', tick_label_font_size)
             l_pos = standard_legend_cfg.get('position', 'best')
+            legend_font_properties = {'weight': std_legend_fw}
 
             if l_pos == 'bottom':
-                fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.05), ncol=ncol, fontsize=l_fontsize, frameon=False)
+                fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.05), ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, frameon=False)
                 fig.subplots_adjust(bottom=0.2) 
             elif l_pos == 'top':
-                fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.95), ncol=ncol, fontsize=l_fontsize, frameon=False)
+                fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.95), ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, frameon=False)
                 fig.subplots_adjust(top=0.8) 
             else: 
-                ax_primary_left.legend(handles, labels, loc=l_pos, ncol=ncol, fontsize=l_fontsize, frameon=False)
+                ax_primary_left.legend(handles, labels, loc=l_pos, ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, frameon=False)
 
     # Wind Arrows
     wind_arrow_cfg = graph_plot_config.get('wind_arrows', {})
