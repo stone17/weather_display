@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import traceback
 import aiohttp
 
-from weather_provider_base import WeatherProvider, parse_iso_time
+from weather_provider_base import WeatherProvider, parse_iso_time, HourlyDataPoint, DailyDataPoint
 
 # --- Open-Meteo WMO CODE Mappings ---
 WMO_CODE_TO_OWM_ICON = {
@@ -76,18 +76,32 @@ def transform_open_meteo_data(om_json, lat, lon):
             icon = get_owm_icon_from_wmo_code(weather_code, is_day)
             description = get_wmo_code_description(weather_code)
             pop_val = get_hourly_val('precipitation_probability', i)
-            pop = pop_val / 100.0 if pop_val is not None else 0
-            transformed_data['hourly'].append({
-                'dt': ts, 'temp': temp, 'feels_like': get_hourly_val('apparent_temperature', i, temp),
-                'pressure': get_hourly_val('pressure_msl', i, 1013.0), 'humidity': get_hourly_val('relative_humidity_2m', i, 50),
-                'dew_point': 0, 'uvi': get_hourly_val('uv_index', i, 0.0), 'clouds': get_hourly_val('cloud_cover', i, 50),
-                'visibility': get_hourly_val('visibility', i, 10000), 'wind_speed': get_hourly_val('wind_speed_10m', i, 0.0),
-                'wind_deg': get_hourly_val('wind_direction_10m', i, 0), 'wind_gust': get_hourly_val('wind_gusts_10m', i, 0.0),
-                'weather': [{'id': weather_code, 'main': description.split()[0], 'description': description, 'icon': icon}],
-                'rain': {'1h': get_hourly_val('rain', i, 0.0) or get_hourly_val('precipitation', i, 0.0)},
-                'snow': {'1h': get_hourly_val('snowfall', i, 0.0)}, 'pop': pop
-            })
-        if transformed_data['hourly']: transformed_data['current']['uvi'] = transformed_data['hourly'][0].get('uvi', 0)
+            pop = pop_val / 100.0 if pop_val is not None else None
+
+            hourly_point = HourlyDataPoint(
+                dt=ts,
+                temp=temp,
+                feels_like=get_hourly_val('apparent_temperature', i, temp),
+                pressure=get_hourly_val('pressure_msl', i, 1013.0),
+                humidity=get_hourly_val('relative_humidity_2m', i, 50),
+                # dew_point not directly requested/available
+                uvi=get_hourly_val('uv_index', i, 0.0),
+                clouds=get_hourly_val('cloud_cover', i, 50),
+                visibility=get_hourly_val('visibility', i, 10000),
+                wind_speed=get_hourly_val('wind_speed_10m', i, 0.0),
+                wind_deg=get_hourly_val('wind_direction_10m', i, 0),
+                wind_gust=get_hourly_val('wind_gusts_10m', i, 0.0),
+                weather_id=weather_code,
+                weather_main=description.split()[0] if description else "Unknown",
+                weather_description=description,
+                weather_icon=icon,
+                pop=pop,
+                rain_1h=get_hourly_val('rain', i, 0.0) or get_hourly_val('precipitation', i, 0.0),
+                snow_1h=get_hourly_val('snowfall', i, 0.0)
+            )
+            transformed_data['hourly'].append(hourly_point)
+        if transformed_data['hourly'] and transformed_data['current'] and transformed_data['hourly'][0].uvi is not None:
+             transformed_data['current']['uvi'] = transformed_data['hourly'][0].uvi
     transformed_data['hourly'] = transformed_data['hourly'][:48]
     daily = om_json.get('daily')
     if daily and 'time' in daily:
@@ -112,19 +126,35 @@ def transform_open_meteo_data(om_json, lat, lon):
             daily_icon = get_owm_icon_from_wmo_code(weather_code, 1)
             daily_desc = get_wmo_code_description(weather_code)
             pop_max_val = get_daily_val('precipitation_probability_max', i)
-            transformed_data['daily'].append({
-                'dt': day_ts, 'sunrise': parse_iso_time(get_daily_val('sunrise', i)), 'sunset': parse_iso_time(get_daily_val('sunset', i)),
-                'moonrise': 0, 'moonset': 0, 'moon_phase': 0, 'summary': daily_desc,
-                'temp': {'day': (temp_max + temp_min) / 2, 'min': temp_min, 'max': temp_max, 'night': temp_min, 'eve': temp_min, 'morn': temp_min},
-                'feels_like': {'day': get_daily_val('apparent_temperature_max', i, temp_max), 'night': get_daily_val('apparent_temperature_min', i, temp_min),
-                               'eve': get_daily_val('apparent_temperature_min', i, temp_min), 'morn': get_daily_val('apparent_temperature_min', i, temp_min)},
-                'pressure': 1013, 'humidity': 50, 'dew_point': 0,
-                'wind_speed': get_daily_val('wind_speed_10m_max', i, 0.0), 'wind_deg': get_daily_val('wind_direction_10m_dominant', i, 0),
-                'wind_gust': get_daily_val('wind_gusts_10m_max', i, 0.0),
-                'weather': [{'id': weather_code, 'main': daily_desc.split()[0], 'description': daily_desc, 'icon': daily_icon}],
-                'clouds': 50, 'pop': pop_max_val / 100.0 if pop_max_val is not None else 0,
-                'rain': get_daily_val('precipitation_sum', i, 0.0), 'uvi': get_daily_val('uv_index_max', i, 0.0)
-            })
+
+            daily_point = DailyDataPoint(
+                dt=day_ts,
+                sunrise=parse_iso_time(get_daily_val('sunrise', i)),
+                sunset=parse_iso_time(get_daily_val('sunset', i)),
+                summary=daily_desc,
+                temp_day=(temp_max + temp_min) / 2 if temp_max is not None and temp_min is not None else None,
+                temp_min=temp_min,
+                temp_max=temp_max,
+                temp_night=temp_min, # Approximation
+                temp_eve=temp_min,   # Approximation
+                temp_morn=temp_min,  # Approximation
+                feels_like_day=get_daily_val('apparent_temperature_max', i, temp_max),
+                feels_like_night=get_daily_val('apparent_temperature_min', i, temp_min),
+                # pressure, humidity, dew_point not directly requested for daily
+                wind_speed=get_daily_val('wind_speed_10m_max', i, 0.0),
+                wind_deg=get_daily_val('wind_direction_10m_dominant', i, 0),
+                wind_gust=get_daily_val('wind_gusts_10m_max', i, 0.0),
+                weather_id=weather_code,
+                weather_main=daily_desc.split()[0] if daily_desc else "Unknown",
+                weather_description=daily_desc,
+                weather_icon=daily_icon,
+                # clouds not directly requested for daily
+                pop=pop_max_val / 100.0 if pop_max_val is not None else None,
+                rain=get_daily_val('precipitation_sum', i, 0.0),
+                snow=get_daily_val('snowfall_sum', i, 0.0), # snowfall_sum is available
+                uvi=get_daily_val('uv_index_max', i, 0.0)
+            )
+            transformed_data['daily'].append(daily_point)
             if i == 0 and transformed_data['current']:
                 transformed_data['current']['sunrise'] = parse_iso_time(get_daily_val('sunrise', i))
                 transformed_data['current']['sunset'] = parse_iso_time(get_daily_val('sunset', i))

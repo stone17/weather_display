@@ -1,10 +1,12 @@
 # weather_provider_base.py
 import json
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone # Keep timedelta here
 from abc import ABC, abstractmethod
 import traceback # For detailed error logging
 import aiohttp # For async HTTP client
+from typing import Optional, List, Dict, Any
+from dataclasses import dataclass, field, asdict, is_dataclass
 
 # --- Constants ---
 CACHE_DURATION_MINUTES = 60
@@ -44,6 +46,66 @@ def parse_google_date(date_obj):
         print(f"Warning: Could not parse Google date object '{date_obj}': {e}")
         return 0
 
+# --- Standardized Data Structures ---
+@dataclass
+class HourlyDataPoint:
+    dt: int = 0
+    temp: Optional[float] = None
+    feels_like: Optional[float] = None
+    pressure: Optional[float] = None
+    humidity: Optional[int] = None
+    dew_point: Optional[float] = None
+    uvi: Optional[float] = None
+    clouds: Optional[int] = None
+    visibility: Optional[int] = None
+    wind_speed: Optional[float] = None
+    wind_deg: Optional[int] = None
+    wind_gust: Optional[float] = None
+    weather_id: Optional[int] = None # Provider-specific or mapped (e.g., OWM ID)
+    weather_main: Optional[str] = None # e.g., "Rain", "Clouds"
+    weather_description: Optional[str] = None
+    weather_icon: Optional[str] = None # OWM icon code
+    weather_google_icon_uri: Optional[str] = None # Specific for Google
+    pop: Optional[float] = None # Probability of precipitation (0.0 to 1.0)
+    rain_1h: Optional[float] = None # Rain volume for the last 1 hour
+    snow_1h: Optional[float] = None # Snow volume for the last 1 hour
+
+@dataclass
+class DailyDataPoint:
+    dt: int = 0 # Timestamp, typically start of day UTC
+    sunrise: Optional[int] = None
+    sunset: Optional[int] = None
+    moonrise: Optional[int] = None
+    moonset: Optional[int] = None
+    moon_phase: Optional[float] = None
+    summary: Optional[str] = None # Textual summary of the day's weather
+    temp_day: Optional[float] = None
+    temp_min: Optional[float] = None
+    temp_max: Optional[float] = None
+    temp_night: Optional[float] = None
+    temp_eve: Optional[float] = None
+    temp_morn: Optional[float] = None
+    feels_like_day: Optional[float] = None
+    feels_like_night: Optional[float] = None
+    feels_like_eve: Optional[float] = None
+    feels_like_morn: Optional[float] = None
+    pressure: Optional[float] = None
+    humidity: Optional[int] = None
+    dew_point: Optional[float] = None
+    wind_speed: Optional[float] = None
+    wind_deg: Optional[int] = None
+    wind_gust: Optional[float] = None
+    weather_id: Optional[int] = None
+    weather_main: Optional[str] = None
+    weather_description: Optional[str] = None
+    weather_icon: Optional[str] = None
+    weather_google_icon_uri: Optional[str] = None
+    clouds: Optional[int] = None
+    pop: Optional[float] = None # Probability of precipitation (0.0 to 1.0)
+    rain: Optional[float] = None # Total rain volume for the day
+    snow: Optional[float] = None # Total snow volume for the day
+    uvi: Optional[float] = None
+
 # --- Base Class ---
 class WeatherProvider(ABC):
     """Abstract base class for weather data providers."""
@@ -81,6 +143,7 @@ class WeatherProvider(ABC):
 
     def _load_from_cache(self):
         try:
+            print(f"Attempting to load {self.provider_name} data from cache: {self.cache_file}")
             with open(self.cache_file, 'r') as f:
                 cached_content = json.load(f)
             if cached_content.get('cached_provider_name') != self.provider_name:
@@ -90,6 +153,17 @@ class WeatherProvider(ABC):
             weather_data = cached_content.get('weather_data')
             if isinstance(weather_data, dict) and \
                'current' in weather_data and 'hourly' in weather_data and 'daily' in weather_data:
+                
+                # Reconstruct HourlyDataPoint objects
+                loaded_hourly_dicts = weather_data.get('hourly', [])
+                weather_data['hourly'] = [HourlyDataPoint(**h_dict) for h_dict in loaded_hourly_dicts if isinstance(h_dict, dict)]
+                
+                # Reconstruct DailyDataPoint objects
+                loaded_daily_dicts = weather_data.get('daily', [])
+                weather_data['daily'] = [DailyDataPoint(**d_dict) for d_dict in loaded_daily_dicts if isinstance(d_dict, dict)]
+
+                # 'current' is expected to be a dict and should remain so.
+
                 self._data = weather_data
                 print(f"Using cached weather data for {self.provider_name}.")
                 return True
@@ -102,14 +176,27 @@ class WeatherProvider(ABC):
 
     def _save_to_cache(self, data_to_save):
         if data_to_save:
+            # Create a serializable version of the data
+            # Deepcopy to avoid modifying the original _data object in memory if it's complex
+            import copy
+            data_to_serialize = copy.deepcopy(data_to_save)
+
+            if isinstance(data_to_serialize.get('hourly'), list):
+                data_to_serialize['hourly'] = [asdict(h) if is_dataclass(h) else h for h in data_to_serialize['hourly']]
+            
+            if isinstance(data_to_serialize.get('daily'), list):
+                data_to_serialize['daily'] = [asdict(d) if is_dataclass(d) else d for d in data_to_serialize['daily']]
+            
+            # 'current' part of data_to_save is already a dictionary and should serialize fine.
+
             cache_content = {
                 'cached_provider_name': self.provider_name,
-                'weather_data': data_to_save
+                'weather_data': data_to_serialize # Use the serialized version
             }
             try:
                 with open(self.cache_file, 'w') as f:
                     json.dump(cache_content, f, indent=4)
-                print(f"Weather data for {self.provider_name} saved to cache: {self.cache_file}")
+                print(f"Serialized weather data for {self.provider_name} saved to cache: {self.cache_file}")
             except (OSError, TypeError) as e:
                 print(f"Error saving data to cache {self.cache_file} for {self.provider_name}: {e}")
         else:
@@ -127,36 +214,46 @@ class WeatherProvider(ABC):
                     self._data['current'][param] = sup_current[param]
                     print(f"  Merged 'current.{param}'")
         sup_hourly_list = supplemental_data_all.get('hourly', [])
-        if sup_hourly_list and self._data.get('hourly'):
-            sup_hourly_lookup = {h['dt']: h for h in sup_hourly_list}
-            for primary_hour_entry in self._data['hourly']:
-                dt_match = primary_hour_entry.get('dt')
+        primary_hourly_list = self._data.get('hourly', [])
+
+        if sup_hourly_list and primary_hourly_list:
+            # Ensure both lists contain dataclass instances or handle dicts if necessary
+            # For now, assume they are HourlyDataPoint instances as per recent changes
+            sup_hourly_lookup = {h.dt: h for h in sup_hourly_list if hasattr(h, 'dt')}
+            
+            for primary_hour_dp in primary_hourly_list:
+                if not hasattr(primary_hour_dp, 'dt'): continue # Skip if not a proper DataPoint
+
+                dt_match = primary_hour_dp.dt
                 if dt_match in sup_hourly_lookup:
-                    sup_hour_entry = sup_hourly_lookup[dt_match]
+                    sup_hour_dp = sup_hourly_lookup[dt_match]
                     for param in parameters_to_merge:
-                        if param in sup_hour_entry:
-                            primary_hour_entry[param] = sup_hour_entry[param]
+                        if hasattr(sup_hour_dp, param):
+                            value_to_merge = getattr(sup_hour_dp, param)
+                            setattr(primary_hour_dp, param, value_to_merge)
+                            # print(f"  Merged 'hourly[dt={dt_match}].{param}' = {value_to_merge}")
+
         sup_daily_list = supplemental_data_all.get('daily', [])
-        if sup_daily_list and self._data.get('daily'):
+        primary_daily_list = self._data.get('daily', [])
+        if sup_daily_list and primary_daily_list:
             sup_daily_date_lookup = {}
-            for sup_day_entry in sup_daily_list:
-                sup_dt_val = sup_day_entry.get('dt')
-                if sup_dt_val:
+            for sup_day_dp in sup_daily_list:
+                if not hasattr(sup_day_dp, 'dt'): continue
+                sup_dt_val = sup_day_dp.dt
+                if sup_dt_val is not None: # Ensure dt is not None
                     sup_date_str = datetime.fromtimestamp(sup_dt_val, tz=timezone.utc).strftime('%Y-%m-%d')
-                    sup_daily_date_lookup[sup_date_str] = sup_day_entry
-            print(f"  DEBUG: Primary daily dates: {[datetime.fromtimestamp(d.get('dt', 0), tz=timezone.utc).strftime('%Y-%m-%d') for d in self._data['daily']]}")
-            print(f"  DEBUG: Supplemental daily dates available for lookup: {list(sup_daily_date_lookup.keys())}")
-            for primary_day_entry in self._data['daily']:
-                primary_dt_val = primary_day_entry.get('dt')
+                    sup_daily_date_lookup[sup_date_str] = sup_day_dp
+            for primary_day_dp in primary_daily_list:
+                if not hasattr(primary_day_dp, 'dt'): continue
+                primary_dt_val = primary_day_dp.dt
                 primary_date_str = datetime.fromtimestamp(primary_dt_val, tz=timezone.utc).strftime('%Y-%m-%d') if primary_dt_val else None
                 if primary_date_str and primary_date_str in sup_daily_date_lookup:
-                    sup_day_entry = sup_daily_date_lookup[primary_date_str]
+                    sup_day_dp_match = sup_daily_date_lookup[primary_date_str]
                     for param in parameters_to_merge:
-                        if param in sup_day_entry:
-                            primary_day_entry[param] = sup_day_entry[param]
-                            print(f"  Merged 'daily[date={primary_date_str}].{param}' = {sup_day_entry[param]}")
-                else:
-                    print(f"  DEBUG: No match for primary daily date={primary_date_str} in supplemental daily lookup.")
+                        if hasattr(sup_day_dp_match, param):
+                            value_to_merge = getattr(sup_day_dp_match, param)
+                            setattr(primary_day_dp, param, value_to_merge)
+                            # print(f"  Merged 'daily[date={primary_date_str}].{param}' = {value_to_merge}")
         print("Data merging complete.")
 
     @abstractmethod

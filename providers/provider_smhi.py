@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 import traceback
 import aiohttp
 
-from weather_provider_base import WeatherProvider, parse_iso_time
+from weather_provider_base import WeatherProvider, HourlyDataPoint, DailyDataPoint # parse_iso_time not used here
 
 # --- SMHI SYMBOL Mappings ---
 SMHI_SYMBOL_TO_OWM_ICON = {
@@ -24,6 +24,7 @@ SMHI_SYMBOL_DESC = {
 }
 
 def get_owm_icon_from_smhi_code(code):
+    # SMHI codes are directly mapped, no day/night variant needed from the code itself
     return SMHI_SYMBOL_TO_OWM_ICON.get(code, 'na')
 
 def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
@@ -34,7 +35,7 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
                         'current': {}, 'hourly': [], 'daily': []}
     if smhi_hourly:
         for hour_fc in smhi_hourly:
-            print(hour_fc)
+            # print(hour_fc) # Debugging print
             hour_dict = hour_fc.__dict__ if hasattr(hour_fc, '__dict__') else hour_fc
             ts = int(hour_dict.get('valid_time', datetime.now(timezone.utc)).timestamp())
             temp = hour_dict.get('temperature', 0.0)
@@ -51,23 +52,39 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
             description = SMHI_SYMBOL_DESC.get(symbol, 'Unknown')
             owm_icon = get_owm_icon_from_smhi_code(symbol)
             if thunder > 0 and 'Thunder' not in description: description += " (Thunder)"
-            hour_entry = {'dt': ts, 'temp': temp, 'feels_like': temp, 'pressure': pressure,
-                          'humidity': humidity, 'dew_point': 0, 'uvi': 0, 'clouds': total_cloud,
-                          'visibility': visibility, 'wind_speed': wind_speed, 'wind_deg': wind_deg,
-                          'wind_gust': wind_gust, 'weather': [{'id': symbol, 'main': description.split()[0],
-                          'description': description, 'icon': owm_icon}],
-                          'rain': {'1h': mean_precipitation}, 'pop': 0}
-            transformed_data['hourly'].append(hour_entry)
+
+            hourly_point = HourlyDataPoint(
+                dt=ts,
+                temp=temp,
+                feels_like=temp, # SMHI does not provide hourly feels_like
+                pressure=pressure,
+                humidity=humidity,
+                # dew_point not directly available
+                # uvi not directly available
+                clouds=total_cloud,
+                visibility=int(visibility),
+                wind_speed=wind_speed,
+                wind_deg=wind_deg,
+                wind_gust=wind_gust,
+                weather_id=symbol,
+                weather_main=description.split()[0] if description else "Unknown",
+                weather_description=description,
+                weather_icon=owm_icon,
+                rain_1h=mean_precipitation
+                # pop not directly available
+            )
+            transformed_data['hourly'].append(hourly_point)
 
     # --- Daily Data Processing ---
     start_index = 0
     if smhi_daily:
         # Check if the first two entries are for the same calendar day
-        first_day_date = getattr(smhi_daily[0], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
-        second_day_date = getattr(smhi_daily[1], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
-        if first_day_date == second_day_date:
-            print(f"SMHI: First two daily entries are for the same day ({first_day_date}). Starting daily forecast from the second entry.")
-            start_index = 1
+        if len(smhi_daily) > 1:
+            first_day_date = getattr(smhi_daily[0], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
+            second_day_date = getattr(smhi_daily[1], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
+            if first_day_date == second_day_date:
+                print(f"SMHI: First two daily entries are for the same day ({first_day_date}). Starting daily forecast from the second entry.")
+                start_index = 1
 
         processed_dates = set()
         # Process daily entries starting from the determined index
@@ -89,26 +106,65 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
             description = SMHI_SYMBOL_DESC.get(symbol, 'Unknown')
             owm_icon = get_owm_icon_from_smhi_code(symbol)
             if thunder > 0 and 'Thunder' not in description: description += " (Thunder)"
-            day_entry = {'dt': day_ts, 'sunrise': 0, 'sunset': 0, 'moonrise': 0, 'moonset': 0, 'moon_phase': 0,
-                         'summary': description, 'temp': {'day': (temp_max + temp_min) / 2, 'min': temp_min, 'max': temp_max, 'night': temp_min, 'eve': temp_min, 'morn': temp_min},
-                         'feels_like': {'day': (temp_max + temp_min) / 2, 'night': temp_min, 'eve': temp_min, 'morn': temp_min},
-                         'pressure': day_dict.get('pressure', 1013.0), 'humidity': day_dict.get('humidity', 50), 'dew_point': 0,
-                         'wind_speed': wind_speed, 'wind_deg': day_dict.get('wind_direction', 0), 'wind_gust': wind_gust,
-                         'weather': [{'id': symbol, 'main': description.split()[0], 'description': description, 'icon': owm_icon}],
-                         'clouds': day_dict.get('total_cloud', 50), 'pop': 0, 'rain': total_precipitation, 'uvi': 0}
-            transformed_data['daily'].append(day_entry)
+
+            daily_point = DailyDataPoint(
+                dt=day_ts,
+                summary=description,
+                temp_day=(temp_max + temp_min) / 2 if temp_max is not None and temp_min is not None else None,
+                temp_min=temp_min,
+                temp_max=temp_max,
+                temp_night=temp_min, # Approximation
+                temp_eve=temp_min,   # Approximation
+                temp_morn=temp_min,  # Approximation
+                feels_like_day=(temp_max + temp_min) / 2 if temp_max is not None and temp_min is not None else None, # Approximation
+                feels_like_night=temp_min, # Approximation
+                pressure=day_dict.get('pressure', 1013.0),
+                humidity=day_dict.get('humidity', 50),
+                wind_speed=wind_speed,
+                wind_deg=day_dict.get('wind_direction', 0),
+                wind_gust=wind_gust,
+                weather_id=symbol,
+                weather_main=description.split()[0] if description else "Unknown",
+                weather_description=description,
+                weather_icon=owm_icon,
+                clouds=day_dict.get('total_cloud', 50),
+                rain=total_precipitation
+                # uvi, pop, sunrise/sunset not directly available from pysmhi daily
+            )
+            transformed_data['daily'].append(daily_point)
+
     if transformed_data['hourly']:
-        transformed_data['current'] = transformed_data['hourly'][0].copy()
-        if transformed_data['daily']:
-             transformed_data['current']['sunrise'] = transformed_data['daily'][0].get('sunrise', 0)
-             transformed_data['current']['sunset'] = transformed_data['daily'][0].get('sunset', 0)
+        first_hour_dp = transformed_data['hourly'][0]
+        # Construct 'current' as a dictionary, similar to OWM structure
+        transformed_data['current'] = {
+            'dt': first_hour_dp.dt,
+            'temp': first_hour_dp.temp,
+            'feels_like': first_hour_dp.feels_like, # SMHI doesn't provide, so it's same as temp
+            'pressure': first_hour_dp.pressure,
+            'humidity': first_hour_dp.humidity,
+            'uvi': first_hour_dp.uvi, # SMHI doesn't provide, so it's None or 0
+            'clouds': first_hour_dp.clouds,
+            'visibility': first_hour_dp.visibility,
+            'wind_speed': first_hour_dp.wind_speed,
+            'wind_deg': first_hour_dp.wind_deg,
+            'wind_gust': first_hour_dp.wind_gust,
+            'weather': [{
+                'id': first_hour_dp.weather_id,
+                'main': first_hour_dp.weather_main,
+                'description': first_hour_dp.weather_description,
+                'icon': first_hour_dp.weather_icon
+            }],
+            'rain': {'1h': first_hour_dp.rain_1h} if first_hour_dp.rain_1h is not None else None
+        }
+        # SMHI hourly doesn't have sunrise/sunset, current will get it from daily if available later
     elif transformed_data['daily']:
          first_daily = transformed_data['daily'][0]
-         transformed_data['current'] = {'dt': first_daily['dt'], 'temp': first_daily['temp']['day'], 'feels_like': first_daily['feels_like']['day'],
-                                        'pressure': first_daily['pressure'], 'humidity': first_daily['humidity'], 'uvi': first_daily['uvi'],
-                                        'wind_speed': first_daily['wind_speed'], 'wind_deg': first_daily['wind_deg'], 'wind_gust': first_daily['wind_gust'],
-                                        'weather': first_daily['weather'], 'rain': {'1h': 0}, 'pop': first_daily['pop'],
-                                        'sunrise': first_daily['sunrise'], 'sunset': first_daily['sunset']}
+         transformed_data['current'] = {'dt': first_daily.dt, 'temp': first_daily.temp_day, 'feels_like': first_daily.feels_like_day,
+                                        'pressure': first_daily.pressure, 'humidity': first_daily.humidity, 'uvi': first_daily.uvi,
+                                        'wind_speed': first_daily.wind_speed, 'wind_deg': first_daily.wind_deg, 'wind_gust': first_daily.wind_gust,
+                                        'weather': [{'id': first_daily.weather_id, 'main': first_daily.weather_main, 'description': first_daily.weather_description, 'icon': first_daily.weather_icon}],
+                                        'rain': {'1h': 0}, 'pop': first_daily.pop, # Approximations
+                                        'sunrise': first_daily.sunrise, 'sunset': first_daily.sunset}
     if not transformed_data['current']:
         print("ERROR: SMHI Transformation resulted in empty 'current' data.")
         # Create a minimal fallback current if all else fails

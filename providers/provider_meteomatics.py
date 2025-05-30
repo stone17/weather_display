@@ -5,7 +5,7 @@ import math
 import traceback
 import aiohttp
 
-from weather_provider_base import WeatherProvider, parse_iso_time
+from weather_provider_base import WeatherProvider, parse_iso_time, HourlyDataPoint, DailyDataPoint
 
 # --- Meteomatics SYMBOL Mappings ---
 METEOMATICS_TO_OWM_ICON = {
@@ -35,6 +35,7 @@ METEOMATICS_SYMBOL_DESC = {
 
 def transform_meteomatics_data(meteomatics_json, lat, lon):
     from collections import defaultdict # Keep import local if only used here
+    from dataclasses import asdict # For converting dataclass to dict for 'current'
     if not meteomatics_json or 'data' not in meteomatics_json or not meteomatics_json['data']:
         print("Error: Invalid or empty data received from Meteomatics.")
         return None
@@ -78,29 +79,60 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         temp_val = get_value_at_ts(temp_param, ts_dt)
         if temp_val is None:
             continue
-        temp = float(temp_val)
+        
         symbol_idx = int(get_value_at_ts(symbol_1h_param, ts_dt, 0))
         owm_icon = METEOMATICS_TO_OWM_ICON.get(symbol_idx, 'na')
         description = METEOMATICS_SYMBOL_DESC.get(symbol_idx, 'Unknown')
-        hourly_list.append({
-            'dt': int(ts_dt.timestamp()),
-            'temp': temp,
-            'feels_like': temp,
-            'pressure': 1013.0,
-            'humidity': 50,
-            'dew_point': 0,
-            'uvi': float(get_value_at_ts(uv_param, ts_dt, 0.0)),
-            'clouds': 50,
-            'visibility': 10000,
-            'wind_speed': float(get_value_at_ts(wind_speed_param, ts_dt, 0.0)),
-            'wind_deg': 0,
-            'wind_gust': float(get_value_at_ts(wind_gust_24h_param, ts_dt, 0.0)),
-            'weather': [{'id': symbol_idx, 'main': description.split()[0],
-            'description': description, 'icon': owm_icon}],
-            'rain': {'1h': float(get_value_at_ts(precip_1h_param, ts_dt, 0.0))}
-        })
+
+        hourly_point = HourlyDataPoint(
+            dt=int(ts_dt.timestamp()),
+            temp=float(temp_val),
+            feels_like=float(temp_val), # Meteomatics basic doesn't provide feels_like per hour
+            pressure=1013.0, # Placeholder
+            humidity=50, # Placeholder
+            dew_point=0.0, # Placeholder
+            uvi=float(get_value_at_ts(uv_param, ts_dt, 0.0)),
+            clouds=50, # Placeholder
+            visibility=10000, # Placeholder
+            wind_speed=float(get_value_at_ts(wind_speed_param, ts_dt, 0.0)),
+            wind_deg=0, # Placeholder
+            wind_gust=float(get_value_at_ts(wind_gust_24h_param, ts_dt, 0.0)), # Using 24h gust for hourly as approximation
+            weather_id=symbol_idx,
+            weather_main=description.split()[0] if description else "Unknown",
+            weather_description=description,
+            weather_icon=owm_icon,
+            rain_1h=float(get_value_at_ts(precip_1h_param, ts_dt, 0.0))
+        )
+        hourly_list.append(hourly_point)
+
     if hourly_list:
-        transformed_data['current'] = hourly_list[0].copy()
+        first_hour_dp = hourly_list[0]
+        # Construct 'current' as a dictionary, similar to OWM structure
+        transformed_data['current'] = {
+            'dt': first_hour_dp.dt,
+            'temp': first_hour_dp.temp,
+            'feels_like': first_hour_dp.feels_like,
+            'pressure': first_hour_dp.pressure,
+            'humidity': first_hour_dp.humidity,
+            'dew_point': first_hour_dp.dew_point,
+            'uvi': first_hour_dp.uvi,
+            'clouds': first_hour_dp.clouds,
+            'visibility': first_hour_dp.visibility,
+            'wind_speed': first_hour_dp.wind_speed,
+            'wind_deg': first_hour_dp.wind_deg,
+            'wind_gust': first_hour_dp.wind_gust,
+            'weather': [{
+                'id': first_hour_dp.weather_id,
+                'main': first_hour_dp.weather_main,
+                'description': first_hour_dp.weather_description,
+                'icon': first_hour_dp.weather_icon
+            }],
+            'rain': {'1h': first_hour_dp.rain_1h} if first_hour_dp.rain_1h is not None else None,
+            'snow': {'1h': first_hour_dp.snow_1h} if first_hour_dp.snow_1h is not None else None,
+            'pop': first_hour_dp.pop,
+            'sunrise': 0, # Placeholder, Meteomatics basic doesn't provide this directly
+            'sunset': 0   # Placeholder
+        }
         transformed_data['hourly'] = hourly_list[:48]
     else: # Fallback current
         transformed_data['current'] = {'dt': int(datetime.now(timezone.utc).timestamp()), 'temp': 0, 'feels_like': 0, 'pressure': 1013, 'humidity': 50, 'uvi': 0, 'wind_speed': 0, 'wind_deg': 0, 'weather': [{'id': 0, 'main': 'Unknown', 'description': 'Unknown', 'icon': 'na'}], 'rain': {'1h': 0}}
@@ -119,9 +151,9 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
     hourly_agg_by_day_start = defaultdict(lambda: {'winds': [], 'uvis': []})
     if hourly_list:
         for hour in hourly_list:
-            day_start_ts = int((datetime.fromtimestamp(hour['dt'], tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)).timestamp())
-            hourly_agg_by_day_start[day_start_ts]['winds'].append(hour['wind_speed'])
-            hourly_agg_by_day_start[day_start_ts]['uvis'].append(hour['uvi'])
+            day_start_ts = int((datetime.fromtimestamp(hour.dt, tz=timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)).timestamp())
+            if hour.wind_speed is not None: hourly_agg_by_day_start[day_start_ts]['winds'].append(hour.wind_speed)
+            if hour.uvi is not None: hourly_agg_by_day_start[day_start_ts]['uvis'].append(hour.uvi)
 
     for day_ts in sorted(daily_data_by_day_start.keys()):
         day_data = daily_data_by_day_start[day_ts]
@@ -135,18 +167,31 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         daily_icon = METEOMATICS_TO_OWM_ICON.get(symbol_24h, 'na')
         daily_desc = METEOMATICS_SYMBOL_DESC.get(symbol_24h, 'Unknown')
         temp_day_approx = (temp_max + temp_min) / 2
-        transformed_data['daily'].append({
-            'dt': day_ts, 'sunrise': 0, 'sunset': 0, 'moonrise': 0, 'moonset': 0, 'moon_phase': 0,
-            'summary': daily_desc,
-            'temp': {'day': temp_day_approx, 'min': temp_min, 'max': temp_max, 'night': temp_min, 'eve': temp_min, 'morn': temp_min},
-            'feels_like': {'day': temp_day_approx, 'night': temp_min, 'eve': temp_min, 'morn': temp_min},
-            'pressure': 1013, 'humidity': 50, 'dew_point': 0,
-            'wind_speed': sum(hourly_agg['winds']) / len(hourly_agg['winds']) if hourly_agg['winds'] else 0.0,
-            'wind_deg': 0, 'wind_gust': day_data.get(wind_gust_24h_param, 0.0),
-            'weather': [{'id': symbol_24h, 'main': daily_desc.split()[0], 'description': daily_desc, 'icon': daily_icon}],
-            'clouds': 50, 'pop': 0, 'rain': day_data.get(precip_24h_param, 0.0),
-            'uvi': max(hourly_agg['uvis']) if hourly_agg['uvis'] else 0.0
-        })
+
+        daily_point = DailyDataPoint(
+            dt=day_ts,
+            summary=daily_desc,
+            temp_day=temp_day_approx,
+            temp_min=temp_min,
+            temp_max=temp_max,
+            temp_night=temp_min, # Approximation
+            temp_eve=temp_min,   # Approximation
+            temp_morn=temp_min,  # Approximation
+            feels_like_day=temp_day_approx, # Approximation
+            feels_like_night=temp_min,      # Approximation
+            pressure=1013.0, # Placeholder
+            humidity=50,    # Placeholder
+            wind_speed=sum(hourly_agg['winds']) / len(hourly_agg['winds']) if hourly_agg['winds'] else 0.0,
+            wind_gust=day_data.get(wind_gust_24h_param, 0.0),
+            weather_id=symbol_24h,
+            weather_main=daily_desc.split()[0] if daily_desc else "Unknown",
+            weather_description=daily_desc,
+            weather_icon=daily_icon,
+            rain=day_data.get(precip_24h_param, 0.0),
+            uvi=max(hourly_agg['uvis']) if hourly_agg['uvis'] else 0.0
+            # pop, clouds, dew_point, sunrise/sunset etc. are not directly available from basic Meteomatics
+        )
+        transformed_data['daily'].append(daily_point)
     transformed_data['daily'] = transformed_data['daily'][:8]
     return transformed_data
 

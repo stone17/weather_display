@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import traceback
 import aiohttp
 
-from weather_provider_base import WeatherProvider, parse_iso_time, parse_google_date
+from weather_provider_base import WeatherProvider, parse_iso_time, parse_google_date, HourlyDataPoint, DailyDataPoint
 
 # --- Google Weather Condition Mappings ---
 GOOGLE_CONDITION_TO_OWM_ICON = {
@@ -62,26 +62,34 @@ def transform_google_weather_data(google_raw_data, lat, lon):
         'pop': cc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0
     }
     for hour_fc in hourly_raw.get('forecastHours', []):
-        ts = parse_iso_time(hour_fc.get('interval', {}).get('startTime'))
-        if ts == 0: continue
+        ts_h = parse_iso_time(hour_fc.get('interval', {}).get('startTime'))
+        if ts_h == 0: continue
         temp_h = hour_fc.get('temperature', {}).get('degrees', 0.0)
         condition_code_h = hour_fc.get('weatherCondition', {}).get('type', 'CONDITION_UNSPECIFIED')
         description_h = hour_fc.get('weatherCondition', {}).get('description', {}).get('text', 'Unknown')
         owm_icon_h = get_owm_icon_from_google_code(condition_code_h, hour_fc.get('isDaytime', True))
-        transformed_data['hourly'].append({
-            'dt': ts, 'temp': temp_h, 'feels_like': hour_fc.get('feelsLikeTemperature', {}).get('degrees', temp_h),
-            'pressure': hour_fc.get('airPressure', {}).get('meanSeaLevelMillibars', 1013.0),
-            'humidity': hour_fc.get('relativeHumidity', 50), 'dew_point': hour_fc.get('dewPoint', {}).get('degrees', 0.0),
-            'uvi': hour_fc.get('uvIndex', 0), 'clouds': hour_fc.get('cloudCover', 50),
-            'visibility': int(hour_fc.get('visibility', {}).get('distance', 10.0) * 1000),
-            'wind_speed': round(hour_fc.get('wind', {}).get('speed', {}).get('value', 0.0) / 3.6, 2),
-            'wind_deg': hour_fc.get('wind', {}).get('direction', {}).get('degrees', 0),
-            'wind_gust': round(hour_fc.get('wind', {}).get('gust', {}).get('value', 0.0) / 3.6, 2),
-            'weather': [{'id': 0, 'main': description_h.split()[0], 'description': description_h, 'icon': owm_icon_h,
-                         'google_icon_uri': hour_fc.get('weatherCondition', {}).get('iconBaseUri')}],
-            'rain': {'1h': hour_fc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0)},
-            'pop': hour_fc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0
-        })
+
+        hourly_point = HourlyDataPoint(
+            dt=ts_h,
+            temp=temp_h,
+            feels_like=hour_fc.get('feelsLikeTemperature', {}).get('degrees', temp_h),
+            pressure=hour_fc.get('airPressure', {}).get('meanSeaLevelMillibars', 1013.0),
+            humidity=hour_fc.get('relativeHumidity', 50),
+            dew_point=hour_fc.get('dewPoint', {}).get('degrees', 0.0),
+            uvi=float(hour_fc.get('uvIndex', 0)),
+            clouds=hour_fc.get('cloudCover', 50),
+            visibility=int(hour_fc.get('visibility', {}).get('distance', 10.0) * 1000),
+            wind_speed=round(hour_fc.get('wind', {}).get('speed', {}).get('value', 0.0) / 3.6, 2),
+            wind_deg=hour_fc.get('wind', {}).get('direction', {}).get('degrees', 0),
+            wind_gust=round(hour_fc.get('wind', {}).get('gust', {}).get('value', 0.0) / 3.6, 2),
+            weather_main=description_h.split()[0] if description_h else "Unknown",
+            weather_description=description_h,
+            weather_icon=owm_icon_h,
+            weather_google_icon_uri=hour_fc.get('weatherCondition', {}).get('iconBaseUri'),
+            rain_1h=hour_fc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0),
+            pop=hour_fc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0
+        )
+        transformed_data['hourly'].append(hourly_point)
     transformed_data['hourly'] = transformed_data['hourly'][:48]
     for day_fc in daily_raw.get('forecastDays', []):
         day_ts = parse_google_date(day_fc.get('displayDate'))
@@ -99,29 +107,43 @@ def transform_google_weather_data(google_raw_data, lat, lon):
         precip_total_mm = daytime_fc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0) + \
                           nighttime_fc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0)
 
-        transformed_data['daily'].append({
-            'dt': day_ts, 'sunrise': parse_iso_time(day_fc.get('sunEvents', {}).get('sunriseTime')),
-            'sunset': parse_iso_time(day_fc.get('sunEvents', {}).get('sunsetTime')),
-            'moonrise': 0, 'moonset': 0, 'moon_phase': 0, 'summary': description_d,
-            'temp': {'day': (temp_max + temp_min) / 2, 'min': temp_min, 'max': temp_max, 'night': temp_min, 'eve': temp_min, 'morn': temp_min},
-            'feels_like': {'day': day_fc.get('feelsLikeMaxTemperature', {}).get('degrees', temp_max),
-                           'night': day_fc.get('feelsLikeMinTemperature', {}).get('degrees', temp_min),
-                           'eve': day_fc.get('feelsLikeMinTemperature', {}).get('degrees', temp_min),
-                           'morn': day_fc.get('feelsLikeMinTemperature', {}).get('degrees', temp_min)},
-            'pressure': 1013, 'humidity': active_fc.get('relativeHumidity', 50), 'dew_point': 0,
-            'wind_speed': round(active_fc.get('wind', {}).get('speed', {}).get('value', 0.0) / 3.6, 2),
-            'wind_deg': active_fc.get('wind', {}).get('direction', {}).get('degrees', 0),
-            'wind_gust': round(active_fc.get('wind', {}).get('gust', {}).get('value', 0.0) / 3.6, 2),
-            'weather': [{'id': 0, 'main': description_d.split()[0], 'description': description_d, 'icon': owm_icon_d,
-                         'google_icon_uri': active_fc.get('weatherCondition', {}).get('iconBaseUri')}],
-            'clouds': active_fc.get('cloudCover', 50),
-            'pop': active_fc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0,
-            'rain': precip_total_mm, 'uvi': active_fc.get('uvIndex', 0)
-        })
+        daily_point = DailyDataPoint(
+            dt=day_ts,
+            sunrise=parse_iso_time(day_fc.get('sunEvents', {}).get('sunriseTime')),
+            sunset=parse_iso_time(day_fc.get('sunEvents', {}).get('sunsetTime')),
+            summary=description_d,
+            temp_day=(temp_max + temp_min) / 2 if temp_max is not None and temp_min is not None else None,
+            temp_min=temp_min,
+            temp_max=temp_max,
+            temp_night=temp_min, # Approximation
+            temp_eve=temp_min,   # Approximation
+            temp_morn=temp_min,  # Approximation
+            feels_like_day=day_fc.get('feelsLikeMaxTemperature', {}).get('degrees', temp_max),
+            feels_like_night=day_fc.get('feelsLikeMinTemperature', {}).get('degrees', temp_min),
+            humidity=active_fc.get('relativeHumidity', 50),
+            wind_speed=round(active_fc.get('wind', {}).get('speed', {}).get('value', 0.0) / 3.6, 2),
+            wind_deg=active_fc.get('wind', {}).get('direction', {}).get('degrees', 0),
+            wind_gust=round(active_fc.get('wind', {}).get('gust', {}).get('value', 0.0) / 3.6, 2),
+            weather_main=description_d.split()[0] if description_d else "Unknown",
+            weather_description=description_d,
+            weather_icon=owm_icon_d,
+            weather_google_icon_uri=active_fc.get('weatherCondition', {}).get('iconBaseUri'),
+            clouds=active_fc.get('cloudCover', 50),
+            pop=active_fc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0,
+            rain=precip_total_mm,
+            uvi=float(active_fc.get('uvIndex', 0))
+            # pressure, dew_point not directly available for daily
+        )
+        transformed_data['daily'].append(daily_point)
     transformed_data['daily'] = transformed_data['daily'][:8]
     if transformed_data['daily'] and transformed_data['current']:
-        transformed_data['current']['sunrise'] = transformed_data['daily'][0].get('sunrise', 0)
-        transformed_data['current']['sunset'] = transformed_data['daily'][0].get('sunset', 0)
+        first_daily_dp = transformed_data['daily'][0]
+        # Access attributes directly and provide a default if None
+        transformed_data['current']['sunrise'] = first_daily_dp.sunrise if first_daily_dp.sunrise is not None else 0
+        transformed_data['current']['sunset'] = first_daily_dp.sunset if first_daily_dp.sunset is not None else 0
+        # Also, ensure UVI from daily is considered if current doesn't have it or if daily is more accurate
+        if transformed_data['current'].get('uvi') == 0 and first_daily_dp.uvi is not None: # Example logic
+            transformed_data['current']['uvi'] = first_daily_dp.uvi
     return transformed_data
 
 class GoogleWeatherProvider(WeatherProvider):

@@ -1,5 +1,6 @@
 # weather_data_parser.py
 from datetime import datetime, timezone
+from typing import Union, Dict, Any
 
 class WeatherData:
     """
@@ -20,21 +21,26 @@ class WeatherData:
         """Checks if essential data components are present."""
         return bool(self.current and self.hourly and self.daily)
 
-    def _select_icon_identifier(self, weather_info_dict):
+    def _select_icon_identifier(self, weather_source: Union[Dict[str, Any], object]):
         """
         Selects the icon identifier (URL or code) based on provider preference.
+        Accepts either a dictionary (for current weather's 'weather' item)
+        or a HourlyDataPoint/DailyDataPoint object.
         Always attempts to return a 'day' version for OWM icons.
         """
-        if not weather_info_dict:
+        if not weather_source:
             return None
-            
-        google_icon_uri = weather_info_dict.get('google_icon_uri')
-        owm_icon_code = weather_info_dict.get('icon')
+
+        if isinstance(weather_source, dict):
+            google_icon_uri = weather_source.get('google_icon_uri')
+            owm_icon_code = weather_source.get('icon')
+        else: # Assumes HourlyDataPoint or DailyDataPoint object
+            google_icon_uri = getattr(weather_source, 'weather_google_icon_uri', None)
+            owm_icon_code = getattr(weather_source, 'weather_icon', None)
 
         if self.icon_provider_preference == "google" and google_icon_uri:
             return google_icon_uri
         elif owm_icon_code and owm_icon_code != 'na':
-            # Prefer day version for display if OWM is used
             if 'n' in owm_icon_code:
                 return owm_icon_code.replace("n", "d")
             return owm_icon_code
@@ -44,17 +50,23 @@ class WeatherData:
         if not self.current_raw:
             return {}
             
-        data = {}
-        data['temp'] = f"{self.current_raw.get('temp', '?'):.1f}°C".replace('?.1', '?')
-        
+        parsed_current = {}
+        temp_val = self.current_raw.get('temp')
+        parsed_current['temp'] = f"{temp_val:.1f}°C" if temp_val is not None else "?°C"
+
         weather_info_list = self.current_raw.get('weather', [])
         weather_info = weather_info_list[0] if weather_info_list else {}
-        data['icon_identifier'] = self._select_icon_identifier(weather_info)
-        
-        data['feels_like'] = f"{self.current_raw.get('feels_like', '?'):.1f}°C".replace('?.1', '?')
-        data['humidity'] = f"{self.current_raw.get('humidity', '?')}%"
-        data['wind_speed'] = f"{self.current_raw.get('wind_speed', '?'):.1f} m/s".replace('?.1', '?')
-        return data
+        parsed_current['icon_identifier'] = self._select_icon_identifier(weather_info)
+
+        feels_like_val = self.current_raw.get('feels_like')
+        parsed_current['feels_like'] = f"{feels_like_val:.1f}°C" if feels_like_val is not None else "?°C"
+
+        humidity_val = self.current_raw.get('humidity')
+        parsed_current['humidity'] = f"{humidity_val}%" if humidity_val is not None else "?%"
+
+        wind_speed_val = self.current_raw.get('wind_speed')
+        parsed_current['wind_speed'] = f"{wind_speed_val:.1f} m/s" if wind_speed_val is not None else "? m/s"
+        return parsed_current
 
     def _parse_hourly_forecast(self):
         """ Parses hourly data for the graph, ensuring valid timestamps. """
@@ -64,8 +76,8 @@ class WeatherData:
 
         hours_to_display = self.graph_config.get('graph_time_range_hours', 24)
         for h_data in self.hourly_raw[:hours_to_display]:
-            dt_val = h_data.get('dt', 0)
-            # Ensure dt_val is a valid timestamp before conversion
+            # h_data is an HourlyDataPoint object, access attributes directly
+            dt_val = h_data.dt
             try:
                 # Attempt to create a datetime object to catch obviously bad timestamps early
                 # (e.g., if dt_val is not a number or is extremely out of range)
@@ -81,29 +93,21 @@ class WeatherData:
                 # print(f"Warning: Skipping hourly data point with year <= 1970: {dt_obj}")
                 continue
 
-            # Ensure rain and snow are numeric or None
-            rain_val = h_data.get('rain')
-            if isinstance(rain_val, dict):
-                rain_val = rain_val.get('1h') # Common key for 1-hour accumulation
-
-            snow_val = h_data.get('snow')
-            if isinstance(snow_val, dict):
-                snow_val = snow_val.get('1h') # Common key for 1-hour accumulation
-
             entry = {
                 'dt': dt_obj,
-                'temp': h_data.get('temp'), # Will be None if missing
-                'feels_like': h_data.get('feels_like'),
-                'humidity': h_data.get('humidity'),
-                'uvi': h_data.get('uvi'),
-                'wind_speed': h_data.get('wind_speed'),
-                'wind_deg': h_data.get('wind_deg'),
-                'wind_gust': h_data.get('wind_gust'),
-                'rain': rain_val,
-                'snow': snow_val
+                'temp': h_data.temp,
+                'feels_like': h_data.feels_like,
+                'humidity': h_data.humidity,
+                'uvi': h_data.uvi,
+                'wind_speed': h_data.wind_speed,
+                'wind_deg': h_data.wind_deg,
+                'wind_gust': h_data.wind_gust,
+                'rain': h_data.rain_1h,
+                'snow': h_data.snow_1h
             }
             parsed_hourly.append(entry)
         return parsed_hourly
+
 
     def _parse_daily_forecast(self):
         parsed_daily = []
@@ -113,25 +117,29 @@ class WeatherData:
 
         for day_data in self.daily_raw[:5]: # Show 5 days
             entry = {}
-            dt_val = day_data.get('dt', 0)
+            dt_val = day_data.dt # day_data is DailyDataPoint
             entry['day_name'] = datetime.fromtimestamp(dt_val).strftime('%a') if dt_val else '???'
             
-            weather_info_list = day_data.get('weather', [])
-            weather_info = weather_info_list[0] if weather_info_list else {}
-            entry['icon_identifier'] = self._select_icon_identifier(weather_info)
+            entry['icon_identifier'] = self._select_icon_identifier(day_data) # Pass the object itself
 
-            temp_dict = day_data.get('temp', {})
-            entry['temp_max'] = f"{temp_dict.get('max', '?'):.0f}°".replace('?.0', '?')
-            entry['temp_min'] = f"{temp_dict.get('min', '?'):.0f}°".replace('?.0', '?')
+            temp_max_val = day_data.temp_max
+            entry['temp_max'] = f"{temp_max_val:.0f}°" if temp_max_val is not None else "?°"
+            temp_min_val = day_data.temp_min
+            entry['temp_min'] = f"{temp_min_val:.0f}°" if temp_min_val is not None else "?°"
             
-            rain_val = day_data.get('rain', 0.0)
-            entry['rain'] = f"{rain_val:.1f} mm"
+            rain_val = day_data.rain
+            entry['rain'] = f"{rain_val:.1f} mm" if rain_val is not None else "? mm"
             
-            wind_val = day_data.get('wind_speed', '?')
-            entry['wind_speed'] = f"{wind_val:.1f} m/s" if isinstance(wind_val, (int, float)) else f"{wind_val} m/s"
+            wind_val = day_data.wind_speed
+            if wind_val is not None and isinstance(wind_val, (int, float)):
+                entry['wind_speed'] = f"{wind_val:.1f} m/s"
+            else:
+                entry['wind_speed'] = f"{wind_val} m/s" if wind_val is not None else "? m/s"
 
-            uvi_val = day_data.get('uvi', '?')
-            entry['uvi'] = f"UV {uvi_val:.1f}" if isinstance(uvi_val, (int, float)) else f"UV {uvi_val}"
-            
+            uvi_val = day_data.uvi
+            if uvi_val is not None and isinstance(uvi_val, (int, float)):
+                entry['uvi'] = f"UV {uvi_val:.1f}"
+            else:
+                entry['uvi'] = f"UV {uvi_val}" if uvi_val is not None else "UV ?"
             parsed_daily.append(entry)
         return parsed_daily
