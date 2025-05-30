@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.path import Path
 from matplotlib.transforms import Affine2D
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox # Moved to top-level imports
 from datetime import datetime, timedelta, timezone
 
 # Local application imports (assuming weather_data_parser is in the same directory or accessible via sys.path)
@@ -76,13 +77,71 @@ def download_and_cache_icon(icon_identifier, project_root_path, icon_cache_dir="
         print(f"Unexpected error downloading/saving icon {icon_identifier}: {e}")
     return None
 
+def _plot_weather_symbols_for_series(
+    current_ax, # The Matplotlib axis object for the current series
+    series_times, # List of datetime objects for the current series' X-values
+    series_values, # List of numerical values for the current series' Y-values
+    parsed_hourly_data_all, # Full list of hourly data dicts (contains icon codes)
+    series_symbol_config, # The 'weather_symbols' dict from the current series' config
+    icon_provider_preference_from_config, # Global icon preference ("google" or "openweathermap")
+    project_root_path_for_icons # Path to project root for icon caching
+):
+    """
+    Plots weather symbols on the graph for a specific series.
+    """
+    if not series_times or not series_values:
+        return # No data in the series to attach symbols to
+
+    prefer_day_owm = series_symbol_config.get('prefer_day_owm_icons', True)
+    icon_size_px = series_symbol_config.get('icon_size_pixels', 20)
+    vertical_offset_px = series_symbol_config.get('vertical_offset_pixels', 10)
+    time_interval_hrs = series_symbol_config.get('time_interval_hours', 3)
+    
+    # Create a lookup for the current series' Y-values by timestamp for quick access
+    current_series_y_values_map = {dt: val for dt, val in zip(series_times, series_values)}
+    
+    icon_display_step = max(1, int(time_interval_hrs)) # Determine how often to show an icon
+    # Iterate through the complete hourly data to get icon codes and respect overall time interval
+    for idx, h_data_dict in enumerate(parsed_hourly_data_all):
+        if idx % icon_display_step == 0: # Check if this index matches the desired interval
+            current_h_dt = h_data_dict['dt'] # Datetime object for the current hour from all data
+            y_data_val = current_series_y_values_map.get(current_h_dt) # Get Y-value if this hour is in the current series
+
+            if y_data_val is not None: # If this timestamp exists in the current series
+                raw_owm_icon_code = h_data_dict.get('weather_icon')
+                google_uri = h_data_dict.get('weather_google_icon_uri')
+                chosen_icon_id_for_graph = None
+
+                # Select icon based on preference and availability
+                if icon_provider_preference_from_config == "google" and google_uri:
+                    chosen_icon_id_for_graph = google_uri
+                elif raw_owm_icon_code and raw_owm_icon_code != 'na':
+                    if prefer_day_owm and 'n' in raw_owm_icon_code: # Convert night OWM icons to day if preferred
+                        chosen_icon_id_for_graph = raw_owm_icon_code.replace("n", "d")
+                    else:
+                        chosen_icon_id_for_graph = raw_owm_icon_code
+                if chosen_icon_id_for_graph:
+                    icon_file_path = download_and_cache_icon(chosen_icon_id_for_graph, project_root_path_for_icons, "icon_cache")
+                    if icon_file_path:
+                        try:
+                            pil_icon = Image.open(icon_file_path).convert("RGBA")
+                            original_icon_w, _ = pil_icon.size
+                            zoom_factor = icon_size_px / original_icon_w if original_icon_w > 0 else 1.0
+                            imagebox = OffsetImage(pil_icon, zoom=zoom_factor)
+                            ab = AnnotationBbox(imagebox, (current_h_dt, y_data_val),
+                                                xybox=(0., vertical_offset_px), xycoords='data', # xy is data coords
+                                                boxcoords="offset points", frameon=False, pad=0, zorder=10) # xybox is offset in points
+                            current_ax.add_artist(ab)
+                        except Exception as e_icon:
+                            print(f"Error processing/plotting graph icon {chosen_icon_id_for_graph} for series at {current_h_dt}: {e_icon}")
 
 def create_24h_forecast_section(
     parsed_hourly_data,
     graph_plot_config, # New: from config.yaml section graph_24h_forecast_config
     x_pos, y_pos, # Renamed for clarity, position to paste the graph
-    width, height,
-    default_font_path, base_font_size # Base font settings from generate_weather_image
+    width, height, # Dimensions for the graph area
+    default_font_path, base_font_size, # Base font settings
+    project_root_path_for_icons, icon_provider_preference_from_config # For icon handling
 ):
     """Creates the 24-hour forecast section (graph) on the image_canvas."""
     global image_canvas # Uses global image_canvas
@@ -298,6 +357,19 @@ def create_24h_forecast_section(
 
         plotted_axes_info.append({'ax': current_ax, 'config': cfg, 'parameter': cfg.get('parameter')})
 
+        # --- Per-Series Weather Symbols (Left Axis) ---
+        series_weather_symbols_cfg = cfg.get('weather_symbols', {})
+        if series_weather_symbols_cfg.get('enabled', False):
+            _plot_weather_symbols_for_series(
+                current_ax,
+                s_times,
+                s_values,
+                parsed_hourly_data, # Full hourly data list
+                series_weather_symbols_cfg,
+                icon_provider_preference_from_config,
+                project_root_path_for_icons
+            )
+
 
     # Process Right Axis Series
     is_first_on_right = True
@@ -412,6 +484,19 @@ def create_24h_forecast_section(
         # Update processed_series_data with the axis object for this series
         if cfg.get('parameter') in processed_series_data:
             processed_series_data[cfg.get('parameter')]['axis'] = current_ax
+        
+        # --- Per-Series Weather Symbols (Right Axis) ---
+        series_weather_symbols_cfg = cfg.get('weather_symbols', {})
+        if series_weather_symbols_cfg.get('enabled', False):
+            _plot_weather_symbols_for_series(
+                current_ax,
+                s_times,
+                s_values,
+                parsed_hourly_data, # Full hourly data list
+                series_weather_symbols_cfg,
+                icon_provider_preference_from_config,
+                project_root_path_for_icons
+            )
 
     # Update axis information in processed_series_data after all axes are created
     for ax_info in plotted_axes_info:
@@ -645,6 +730,7 @@ def create_24h_forecast_section(
                                             color=wind_arrow_cfg.get('color', 'black'),
                                             markeredgecolor=wind_arrow_cfg.get('edge_color', 'grey'),
                                             clip_on=False)
+
     if not peak_display_enabled and (not use_standard_legend or not handles): # If no legend at all, use standard tight_layout
         fig.tight_layout(pad=0.5)
     # If legend was placed with subplots_adjust, tight_layout might fight it.
@@ -854,10 +940,14 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
     
     graph_specific_config = app_config.get("graph_24h_forecast_config")
 
+    # Get icon_provider_preference from the main app_config for consistent icon handling
+    main_icon_provider_pref = app_config.get("icon_provider", "openweathermap").lower()
+
     create_24h_forecast_section(
         weather_data.hourly, graph_specific_config,
         hourly_forecast_x, hourly_forecast_y, hourly_forecast_width, hourly_forecast_height,
-        font_path, graph_base_font_size)
+        font_path, graph_base_font_size,
+        project_root_path, main_icon_provider_pref) # Pass necessary paths/configs
 
     # --- Daily Forecast Section ---
     create_daily_forecast_display(weather_data.daily, project_root_path, fonts, colors)

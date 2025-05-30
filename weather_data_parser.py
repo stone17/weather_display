@@ -103,7 +103,9 @@ class WeatherData:
                 'wind_deg': h_data.wind_deg,
                 'wind_gust': h_data.wind_gust,
                 'rain': h_data.rain_1h,
-                'snow': h_data.snow_1h
+                'snow': h_data.snow_1h,
+                'weather_icon': h_data.weather_icon, # Added for graph symbols
+                'weather_google_icon_uri': h_data.weather_google_icon_uri # Added for graph symbols
             }
             parsed_hourly.append(entry)
         return parsed_hourly

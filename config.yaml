@@ -76,12 +76,12 @@ graph_24h_forecast_config:
       enabled: true
       location: "in_graph"  # Changed to "in_graph"
       layering: "in_front"  # Options: "in_front", "behind" (of plot lines)
-      start_anchor_y: 0.97          # Y position for the first line of text (0.0 bottom to 1.0 top)
+      axis_start_anchor_y: 0.97          # Y position for the first line of text (0.0 bottom to 1.0 top)
       horizontal_alignment: 'right' # 'left', 'right', 'center' for the text block
       vertical_alignment_per_line: 'top' # 'top', 'center', 'bottom' for each text line relative to its y_pos
       font_size: 10
       font_weight: "bold"
-      line_y_step: 0.085            # Vertical step for the next line, in fraction of axes height (e.g., 0.06 means 6% down)
+      axis_line_y_step: 0.085            # Vertical step for the next line, in fraction of axes height (e.g., 0.06 means 6% down)
       text_bbox:                  # Bounding box style for each text line
         enabled: true
         face_color: "white"
@@ -120,6 +120,13 @@ graph_24h_forecast_config:
       data_occupancy_factor: 0.8  # Data will take up 80% of its Y-axis range, 10% padding top/bottom
       # y_axis_min: 5               # Example if using manual_range
       # y_axis_max: 20              # Example if using manual_range
+
+      weather_symbols: # Weather symbols configuration specific to this "temp" series
+        enabled: true
+        prefer_day_owm_icons: true
+        icon_size_pixels: 20
+        vertical_offset_pixels: 10
+        time_interval_hours: 3
 
     - parameter: "wind_speed"
       axis_label: ""   # Y-axis label for wind
