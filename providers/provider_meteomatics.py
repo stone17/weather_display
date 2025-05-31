@@ -93,12 +93,10 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         temp_val = get_value_at_ts(temp_param, ts_dt)
         if temp_val is None:
             continue
-        
+
         symbol_idx = int(get_value_at_ts(symbol_1h_param, ts_dt, 0))
         owm_icon = METEOMATICS_TO_OWM_ICON.get(symbol_idx, 'na')
         description = METEOMATICS_SYMBOL_DESC.get(symbol_idx, 'Unknown')
-
-        print(symbol_idx, owm_icon, symbol_1h_param)
 
         hourly_point = HourlyDataPoint(
             dt=int(ts_dt.timestamp()),

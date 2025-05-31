@@ -8,25 +8,65 @@ from weather_provider_base import WeatherProvider, parse_iso_time, HourlyDataPoi
 
 # --- Open-Meteo WMO CODE Mappings ---
 WMO_CODE_TO_OWM_ICON = {
-    0: '01d', 1: '02d', 2: '03d', 3: '04d', 45: '50d', 48: '50d', 51: '10d',
-    53: '10d', 55: '09d', 56: '10d', 57: '09d', 61: '10d', 63: '09d', 65: '09d',
-    66: '10d', 67: '09d', 71: '13d', 73: '13d', 75: '13d', 77: '13d', 80: '09d',
-    81: '09d', 82: '09d', 85: '13d', 86: '13d', 95: '11d', 96: '11d', 99: '11d',
-    1000: '01n', 1001: '02n', 1002: '03n', 1003: '04n', 1045: '50n', 1048: '50n',
-    1051: '10n', 1053: '10n', 1055: '09n', 1056: '10n', 1057: '09n', 1061: '10n',
-    1063: '09n', 1065: '09n', 1066: '10n', 1067: '09n', 1071: '13n', 1073: '13n',
-    1075: '13n', 1077: '13n', 1080: '09n', 1081: '09n', 1082: '09n', 1085: '13n',
-    1086: '13n', 1095: '11n', 1096: '11n', 1099: '11n',
+    0: '01d', # Clear sky
+    1: '02d', # Mainly clear
+    2: '03d', # Partly cloudy
+    3: '04d', # Overcast
+    45: '50d', # Fog
+    48: '50d', # Depositing rime fog
+    51: '09d', # Light drizzle
+    53: '09d', # Drizzle
+    55: '09d', # Dense drizzle
+    56: '13d', # Light freezing drizzle
+    57: '13d', # Freezing drizzle
+    61: '10d', # Light rain
+    63: '09d', # Rain
+    65: '10d', # Heavy rain
+    66: '13d', # Light freezing rain
+    67: '13d', # Freezing rain
+    71: '13d', # Light snow
+    73: '13d', # Snow
+    75: '13d', # Heavy snow
+    77: '13d', # Snow grains
+    80: '09d', # Light showers
+    81: '09d', # Showers
+    82: '09d', # Heavy showers
+    85: '13d', # Light snow showers
+    86: '13d', # Snow showers
+    95: '11d', # Thunderstorm
+    96: '11d', # Thunderstorm, light hail
+    99: '11d', # Thunderstorm, heavy hail
 }
+
 WMO_CODE_DESC = {
-    0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
-    45: 'Fog', 48: 'Depositing rime fog', 51: 'Light drizzle', 53: 'Drizzle',
-    55: 'Dense drizzle', 56: 'Light freezing drizzle', 57: 'Freezing drizzle',
-    61: 'Light rain', 63: 'Rain', 65: 'Heavy rain', 66: 'Light freezing rain',
-    67: 'Freezing rain', 71: 'Light snow', 73: 'Snow', 75: 'Heavy snow',
-    77: 'Snow grains', 80: 'Light showers', 81: 'Showers', 82: 'Heavy showers',
-    85: 'Light snow showers', 86: 'Snow showers', 95: 'Thunderstorm',
-    96: 'Thunderstorm, light hail', 99: 'Thunderstorm, heavy hail',
+    0: 'Clear sky',
+    1: 'Mainly clear',
+    2: 'Partly cloudy',
+    3: 'Overcast',
+    45: 'Fog',
+    48: 'Depositing rime fog',
+    51: 'Light drizzle',
+    53: 'Drizzle',
+    55: 'Dense drizzle',
+    56: 'Light freezing drizzle',
+    57: 'Freezing drizzle',
+    61: 'Light rain',
+    63: 'Rain',
+    65: 'Heavy rain',
+    66: 'Light freezing rain',
+    67: 'Freezing rain',
+    71: 'Light snow',
+    73: 'Snow',
+    75: 'Heavy snow',
+    77: 'Snow grains',
+    80: 'Light showers',
+    81: 'Showers',
+    82: 'Heavy showers',
+    85: 'Light snow showers',
+    86: 'Snow showers',
+    95: 'Thunderstorm',
+    96: 'Thunderstorm, light hail',
+    99: 'Thunderstorm, heavy hail',
 }
 
 def get_wmo_code_description(code):
