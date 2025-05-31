@@ -70,11 +70,36 @@ async def test_provider_image_generation(provider_id, base_config, project_root_
             icon_pref,
             graph_config=graph_config_for_parser
         )
+
+        # --- BEGIN NEW: Log unmapped daily icon codes from WeatherData ---
+        if weather_data_obj.daily:
+            unmapped_codes_details = []
+            for idx, day_entry in enumerate(weather_data_obj.daily):
+                # day_entry is a dict from weather_data_obj.daily list
+                if day_entry.get('icon_identifier') is None:
+                    original_code = day_entry.get('original_provider_icon_code')
+                    if original_code is not None: # Ensure there's a code to report
+                        day_name = day_entry.get('day_name', f"Day index {idx+1}") # Use 1-based index for display
+                        unmapped_codes_details.append(
+                            f"    - Day: {day_name}, Provider's original icon code: '{original_code}' (failed to map to a display icon)"
+                        )
+            
+            if unmapped_codes_details:
+                print(f"  INFO for {provider_id}: Found daily entries where icon mapping failed. "
+                      f"The following provider codes from the raw data could not be mapped to a display icon:")
+                for detail in unmapped_codes_details:
+                    print(detail)
+                print(f"  Consider adding/reviewing mappings for these provider codes for '{provider_id}' in your icon mapping configuration.")
+        # --- END NEW: Log unmapped daily icon codes ---
+
         if not weather_data_obj.has_sufficient_data():
             print(f"WeatherData object for {provider_id} reports insufficient data after parsing.")
             print(f"  Parsed current: {bool(weather_data_obj.current)}")
             print(f"  Parsed hourly: {bool(weather_data_obj.hourly)}")
             print(f"  Parsed daily: {bool(weather_data_obj.daily)}")
+            # The previous detailed check for missing day icons that was here has been removed,
+            # as the new block above provides a more direct and accurate way to report
+            # unmapped original provider codes from WeatherData.
             return False
     except Exception as e:
         print(f"Error preparing/parsing weather data for {provider_id}: {e}")

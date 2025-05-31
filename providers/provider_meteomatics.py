@@ -9,28 +9,42 @@ from weather_provider_base import WeatherProvider, parse_iso_time, HourlyDataPoi
 
 # --- Meteomatics SYMBOL Mappings ---
 METEOMATICS_TO_OWM_ICON = {
-    1: '01d', 1001: '01n', 2: '02d', 1002: '02n', 3: '03d', 1003: '03n',
-    4: '04d', 1004: '04n', 5: '50d', 1005: '50n', 10: '10d', 1010: '10n',
-    11: '10d', 1011: '10n', 12: '09d', 1012: '09n', 13: '09d', 1013: '09n',
-    14: '10d', 1014: '10n', 15: '10d', 1015: '10n', 16: '09d', 1016: '09n',
-    20: '13d', 1020: '13n', 21: '13d', 1021: '13n', 22: '13d', 1022: '13n',
-    23: '13d', 1023: '13n', 24: '13d', 1024: '13n', 25: '13d', 1025: '13n',
-    26: '09d', 1026: '09n', 27: '09d', 1027: '09n', 28: '09d', 1028: '09n',
-    30: '11d', 1030: '11n', 31: '11d', 1031: '11n', 32: '11d', 1032: '11n', 0: 'na',
+    1: '01d', 101: '01n', # Clear sky
+    2: '02d', 102: '02n', # Light clouds
+    3: '03d', 103: '03n', # Partly Cloudy
+    4: '04d', 104: '04n', # Cloudy
+    5: '09d', 105: '09n', # Rain
+    6: '09d', 106: '09n', # Sleet
+    7: '13d', 107: '13n', # Snow
+    8: '10d', 108: '10n', # Rain Shower
+    9: '13d', 109: '13n', # Snow Shower
+    10: '10d', 110: '10n', # Sleet Shower
+    11: '50d', 111: '50n', # Light Fog
+    12: '50d', 112: '50n', # Dense Fog
+    13: '13d', 113: '13n', # Freezing Rain
+    14: '11d', 114: '11n', # Thunderstorm
+    15: '09d', 115: '09n', # Drizzle
+    16: '50d', 116: '50n', # Sandstorm
+    0: 'na',
 }
 METEOMATICS_SYMBOL_DESC = {
-    1: 'Clear sky', 1001: 'Clear sky', 2: 'Partly cloudy', 1002: 'Partly cloudy',
-    3: 'Cloudy', 1003: 'Cloudy', 4: 'Overcast', 1004: 'Overcast', 5: 'Fog', 1005: 'Fog',
-    10: 'Light rain', 1010: 'Light rain', 11: 'Rain', 1011: 'Rain',
-    12: 'Heavy rain', 1012: 'Heavy rain', 13: 'Heavy rain', 1013: 'Heavy rain',
-    14: 'Light freezing rain', 1014: 'Light freezing rain', 15: 'Freezing rain', 1015: 'Freezing rain',
-    16: 'Heavy freezing rain', 1016: 'Heavy freezing rain', 20: 'Light snow', 1020: 'Light snow',
-    21: 'Snow', 1021: 'Snow', 22: 'Heavy snow', 1022: 'Heavy snow',
-    23: 'Light sleet', 1023: 'Light sleet', 24: 'Sleet', 1024: 'Sleet',
-    25: 'Heavy sleet', 1025: 'Heavy sleet', 26: 'Light hail', 1026: 'Light hail',
-    27: 'Hail', 1027: 'Hail', 28: 'Heavy hail', 1028: 'Heavy hail',
-    30: 'Thunderstorm', 1030: 'Thunderstorm', 31: 'Thunderstorm', 1031: 'Thunderstorm',
-    32: 'Heavy thunderstorm', 1032: 'Heavy thunderstorm', 0: 'Unknown',
+    1: 'Clear sky', 101: 'Clear sky',
+    2: 'Light clouds', 102: 'Light clouds',
+    3: 'Partly cloudy', 103: 'Partly cloudy',
+    4: 'Cloudy', 104: 'Cloudy',
+    5: 'Rain', 105: 'Rain',
+    6: 'Sleet', 106: 'Sleet',
+    7: 'Snow', 107: 'Snow',
+    8: 'Rain Shower', 108: 'Rain Shower',
+    9: 'Snow Shower', 109: 'Snow Shower',
+    10: 'Sleet Shower', 110: 'Sleet Shower',
+    11: 'Light Fog', 111: 'Light Fog',
+    12: 'Dense Fog', 112:'Dense Fog',
+    13: 'Freezing rain', 113: 'Freezing rain',
+    14: 'Thunderstorm', 114: 'Thunderstorm',
+    15: 'Drizzle', 1015: 'Drizzle',
+    16: 'Sandstorm', 1016: 'Sandstorm',
+    0: 'Unknown',
 }
 
 def transform_meteomatics_data(meteomatics_json, lat, lon):
@@ -83,6 +97,8 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         symbol_idx = int(get_value_at_ts(symbol_1h_param, ts_dt, 0))
         owm_icon = METEOMATICS_TO_OWM_ICON.get(symbol_idx, 'na')
         description = METEOMATICS_SYMBOL_DESC.get(symbol_idx, 'Unknown')
+
+        print(symbol_idx, owm_icon, symbol_1h_param)
 
         hourly_point = HourlyDataPoint(
             dt=int(ts_dt.timestamp()),

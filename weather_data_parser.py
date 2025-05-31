@@ -153,9 +153,43 @@ class WeatherData:
             entry = {}
             dt_val = day_data.dt # day_data is DailyDataPoint
             entry['day_name'] = datetime.fromtimestamp(dt_val).strftime('%a') if dt_val else '???'
-            
-            entry['icon_identifier'] = self._select_icon_identifier(day_data) # Pass the object itself
 
+            entry['icon_identifier'] = self._select_icon_identifier(day_data)
+            entry['original_provider_icon_code'] = None # Initialize
+
+            if entry['icon_identifier'] is None:
+                # If icon mapping failed, try to find the original code that caused it.
+                # Priority:
+                # 1. day_data.weather_id (often the provider's raw numeric/enum code)
+                # 2. day_data.weather_icon (the OWM-style code that might have been 'na' or problematic)
+                # 3. Other specific fields like day_data.weather_code (if populated by a provider)
+
+                found_original_code = None
+                
+                # Check weather_id first (provider's original integer/enum code)
+                code_val_id = getattr(day_data, 'weather_id', None)
+                if code_val_id is not None and str(code_val_id).strip().lower() not in ['', 'na']:
+                    found_original_code = str(code_val_id)
+                
+                # If not found via weather_id, check weather_icon 
+                # (this would be the OWM-style icon string, e.g., "01d" or "na")
+                if found_original_code is None:
+                    code_val_icon = getattr(day_data, 'weather_icon', None)
+                    # We accept 'na' here as a reportable "code" if weather_id wasn't available/useful
+                    if code_val_icon is not None and str(code_val_icon).strip() != '': 
+                        found_original_code = str(code_val_icon)
+
+                # As a further fallback, check a list of other common attribute names
+                if found_original_code is None:
+                    potential_fallback_attrs = ['weather_code', 'condition_code', 'symbol_code', 'icon_code']
+                    for attr_name in potential_fallback_attrs:
+                        code_val = getattr(day_data, attr_name, None)
+                        if code_val is not None and str(code_val).strip().lower() not in ['', 'na']:
+                            found_original_code = str(code_val)
+                            break 
+                
+                if found_original_code:
+                    entry['original_provider_icon_code'] = found_original_code
             # Store numerical values directly. Formatting will be done in image_generator.
             entry['temp_max'] = day_data.temp_max
             entry['temp_min'] = day_data.temp_min
