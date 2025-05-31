@@ -70,7 +70,8 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
                 weather_main=description.split()[0] if description else "Unknown",
                 weather_description=description,
                 weather_icon=owm_icon,
-                rain_1h=mean_precipitation
+                rain_1h=mean_precipitation,
+                snow_1h=hour_dict.get('frozen_precipitation', 0.0)
                 # pop not directly available
             )
             transformed_data['hourly'].append(hourly_point)

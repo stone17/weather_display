@@ -13,12 +13,17 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 * Caches weather data to reduce API calls.
 * Provider-specific caching: Cache is invalidated if the weather provider is changed.
 * Configurable cache lifetime.
+* Customizable graph appearance through configuration file.
 * Asynchronous data fetching for improved performance.
 * Optimized for 7-color e-Paper displays.
 
-![Alt text](images/weather.png)
+<div align="center">
+  <img src="images/weather.png" alt="Weather Display" />
+</div>
 
-![Alt text](images/build.jpg)
+<div align="center">
+  <img src="images/build.jpg" alt="Build" />
+</div>
 
 ## Hardware Requirements
 
@@ -116,7 +121,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
     *   Run: `pip install -r requirements.txt`
 4.  **Run the Script:**
     *   Execute `python create_weather_info.py`. This will fetch weather data (using cache if available), create the `weather_forecast_graph.png` image, and attempt to upload it to your ESP32 if `server_ip` is configured.
-    *   By default, the script will look for `config.json` in the same directory as `create_weather_info.py`.
+    *   By default, the script will look for `config.yaml` in the same directory as `create_weather_info.py`.
     *   You can specify a custom path to your configuration file using the `--config` argument:
         ```bash
         python c:\Toolz\weather_display\create_weather_info.py --config /path/to/your/custom_config.yaml
@@ -200,9 +205,32 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
     Refer to the `config.defaults.yaml` (if available) or the full example in `config.yaml` for all available options and detailed comments.
 
 
+## Weather Provider Parameter Support
+
+This table summarizes the weather parameters supported by each provider. Note that availability may vary based on location and specific API plans. This reflects a hypothetical, comprehensive dataset; actual support should be verified by testing and consulting provider documentation.
+
+| Parameter     | open-meteo | openweathermap | meteomatics | google | smhi         | Notes                                                                                                                                                                                                                                                                                     |
+| --------------- | :--------: | :------------: | :----------: | :----: | :-----------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `temp`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       | Temperature (Celsius)                                                                                                                                                                                                                                                                       |
+| `feels_like`    |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       | "Feels like" temperature, accounting for wind and humidity.                                                                                                                                                                                                                                  |
+| `humidity`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       | Relative humidity (%).                                                                                                                                                                                                                                                                    |
+| `uvi`           |     ✅      |       ✅        |      ✅       |   ❌   | ✅ (point)   | UV Index. SMHI provides this via its point forecast.                                                                                                                                                                                                                                         |
+| `wind_speed`    |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       | Wind speed (m/s, km/h, mph).                                                                                                                                                                                                                                                               |
+| `wind_gust`     |     ✅      |       ✅        |      ✅       |   ❌   |      ✅       | Wind gust speed (m/s, km/h, mph).                                                                                                                                                                                                                                                          |
+| `wind_deg`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       | Wind direction (degrees).                                                                                                                                                                                                                                                               |
+| `rain`          |     ✅      |       ✅        |      ✅       |   ✅   | ✅ (mixed)   | Rainfall (mm, inches). SMHI provides gridded forecasts with precipitation *probability* and point forecasts with actual rainfall (but only in their "corrected" forecast, not the raw data).                                                                                                  |
+| `snow`          |     ✅      |       ✅        |      ✅       |   ✅   | ✅ (approx.) | Snowfall (mm). SMHI provides this as "frozen precipitation" which includes snow.                                                                                                                                                                                                           |
+| `weather`       |     ✅      |       ✅        |      ✅       |   ✅   | ✅ (summary) | Weather condition codes/descriptions/icons. SMHI lacks hourly icons and detailed descriptions in its raw data, but the library provides a basic summary mapping.                                                                                                                            |
+| `hourly`        |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       | Hourly forecast data.                                                                                                                                                                                                                                                                   |
+| `daily`         |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       | Daily forecast summaries.                                                                                                                                                                                                                                                             |
+| `alerts`        |     ❌      |       ✅        |      ✅       |   ✅   |      ✅       | Severe weather alerts.                                                                                                                                                                                                                                                                |
+| `precipitation` |     ✅      |       ✅        |      ✅       |   ✅   | ✅ (mixed)   | General precipitation (rain, snow, etc.). SMHI mainly provides rain as point forecasts and gridded probabilities.                                                                                                                                                                         |
+| `summary`       |     ✅      |       ✅        |      ✅       |   ✅   | ✅ (basic)   | Text summary of weather. SMHI's `pysmhi` library can provide this, but it's less detailed than other providers.                                                                                                                                                                               |
+
+
 ## Customization
 
-*   **Providers:** Select your preferred `weather_provider` and `icon_provider` in `config.json`.
+*   **Providers:** Select your preferred `weather_provider` and `icon_provider` in `config.yaml`.
 *   **Font:** Change the `font_path` variables in `create_weather_info.py` to use different TrueType fonts.
 *   **Colors:** Modify the color value tuples (RGB) in `create_weather_info.py` to customize the display's appearance.
 *   **Display:** Adjust the image processing and upload code in `upload.py` to support different e-Paper display models or upload methods.
@@ -210,9 +238,9 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 ## Troubleshooting
 
 *   **Display Issues:** Double-check the wiring between the ESP32 and the e-Paper display. Ensure the correct Waveshare firmware is flashed and running.
-*   **Network Errors:** Verify your ESP32 is connected to your WiFi network. Confirm the `server_ip` in `config.json` matches the ESP32's actual IP address. Check firewall settings if applicable.
+*   **Network Errors:** Verify your ESP32 is connected to your WiFi network. Confirm the `server_ip` in `config.yaml` matches the ESP32's actual IP address. Check firewall settings if applicable.
 *   **API Errors:**
-    *   Verify the API key/credentials in `config.json` for your selected `weather_provider` are correct and active.
+    *   Verify the API key/credentials in `config.yaml` for your selected `weather_provider` are correct and active.
     *   Check the script output for specific error messages from the provider (e.g., 401 Unauthorized, 403 Forbidden, 429 Rate Limit).
     *   Consult the documentation for your chosen weather provider regarding API limits and potential costs (especially Google Weather).
     *   Check the status page of the weather provider if errors persist.

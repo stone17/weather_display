@@ -102,6 +102,7 @@ class DailyDataPoint:
     weather_google_icon_uri: Optional[str] = None
     clouds: Optional[int] = None
     pop: Optional[float] = None # Probability of precipitation (0.0 to 1.0)
+    precipitation: Optional[float] = None # Overall precipitation
     rain: Optional[float] = None # Total rain volume for the day
     snow: Optional[float] = None # Total snow volume for the day
     uvi: Optional[float] = None
