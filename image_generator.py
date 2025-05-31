@@ -593,6 +593,10 @@ def create_24h_forecast_section(
         font_size = peak_display_cfg.get('font_size', tick_label_font_size -1) # Slightly smaller for legend
         text_bbox_config = peak_display_cfg.get('text_bbox', {})
         
+        # Determine zorder for peak legend based on layering config
+        # This zorder will be applied to fig.text or ax.text
+        peak_legend_actual_zorder = 25 if layering == "in_front" else 0.5
+
         current_bbox_props = None # Initialize to None
         if text_bbox_config.get('enabled', True):
             # If layering is "in_front", force bbox to be opaque. Otherwise, use configured alpha.
@@ -604,6 +608,10 @@ def create_24h_forecast_section(
                 ec=text_bbox_config.get('edge_color', 'none')
             )
 
+        # Alignment settings for peak display text (used if converting to fig.text)
+        h_align_fig_default = peak_display_cfg.get('fig_horizontal_alignment', 'center') # For location: above_graph
+        h_align_axis_default = peak_display_cfg.get('axis_horizontal_alignment', 'right') # For location: in_graph
+
         if location == "above_graph":
             print("Using peak value display above graph.")
             reserved_top = peak_display_cfg.get('fig_reserved_top_space', 0.15)
@@ -611,14 +619,14 @@ def create_24h_forecast_section(
 
             current_y_pos = peak_display_cfg.get('fig_start_y', 0.97)
             anchor_x = peak_display_cfg.get('fig_x_coordinate', 0.5)
-            h_align = peak_display_cfg.get('fig_horizontal_alignment', 'center')
+            h_align_to_use = h_align_fig_default
             v_align_line = 'top' # Typically 'top' or 'center' for fig.text lines
             line_y_step = peak_display_cfg.get('fig_line_y_step', 0.035)
         else: # Default to "in_graph"
             print("Using peak value display in graph.")
             current_y_pos = peak_display_cfg.get('axis_start_anchor_y', 0.97)
             anchor_x = peak_display_cfg.get('axis_anchor_x', 0.97)
-            h_align = peak_display_cfg.get('axis_horizontal_alignment', 'right')
+            h_align_to_use = h_align_axis_default
             v_align_line = peak_display_cfg.get('axis_vertical_alignment_per_line', 'top')
             line_y_step = peak_display_cfg.get('axis_line_y_step', 0.075)
 
@@ -652,29 +660,40 @@ def create_24h_forecast_section(
                          transform=fig.transFigure,
                          color=cfg.get('color', 'black'),
                          fontsize=font_size,
-                         fontweight=peak_legend_fw,
-                         ha=h_align,
+                         fontweight=peak_legend_fw, # type: ignore
+                         ha=h_align_to_use,
                          va=v_align_line, # Vertical alignment for the text line itself
-                         bbox=current_bbox_props)
-                # zorder for fig.text is less critical as it's outside axes, but can be set if needed
+                         bbox=current_bbox_props,
+                         zorder=peak_legend_actual_zorder) # Apply zorder
             else: # "in_graph"
-                # Explicit zorders: fills=1, lines=2.
-                # "in_front" legend should be significantly higher, "behind" legend lower.
-                legend_zorder = 20 if layering == "in_front" else 0.5 
-                ax_primary_left.text(anchor_x, current_y_pos, display_text,
-                                     transform=ax_primary_left.transAxes,
-                                     color=cfg.get('color', 'black'),
-                                     fontsize=font_size,
-                                     fontweight=peak_legend_fw,
-                                     ha=h_align,
-                                     va=v_align_line,
-                                     bbox=current_bbox_props,
-                                     zorder=legend_zorder)
+                if layering == "in_front":
+                    # Convert ax.transAxes coordinates to fig.transFigure coordinates
+                    # (anchor_x, current_y_pos) are in ax_primary_left.transAxes
+                    display_coords_in_axes_pixels = ax_primary_left.transAxes.transform((anchor_x, current_y_pos))
+                    figure_coords_normalized = fig.transFigure.inverted().transform(display_coords_in_axes_pixels)
+                    
+                    fig.text(figure_coords_normalized[0], figure_coords_normalized[1], display_text,
+                             transform=fig.transFigure, # Now using figure coordinates
+                             color=cfg.get('color', 'black'),
+                             fontsize=font_size,
+                             fontweight=peak_legend_fw, # type: ignore
+                             ha=h_align_to_use, # Use axis-derived alignment as anchor point was from axis
+                             va=v_align_line,
+                             bbox=current_bbox_props,
+                             zorder=peak_legend_actual_zorder) # High zorder
+                else: # layering == "behind" for "in_graph"
+                    ax_primary_left.text(anchor_x, current_y_pos, display_text, # type: ignore
+                                         transform=ax_primary_left.transAxes,
+                                         color=cfg.get('color', 'black'),
+                                         fontsize=font_size,
+                                         fontweight=peak_legend_fw, # type: ignore
+                                         ha=h_align_to_use,
+                                         va=v_align_line,
+                                         bbox=current_bbox_props,
+                                         zorder=peak_legend_actual_zorder) # Low zorder (0.5)
             current_y_pos -= line_y_step
 
     elif use_standard_legend: # Standard legend
-        # For standard legend, Matplotlib usually handles z-order well,
-        # but if needed, legend.set_zorder() could be used after creation.
         handles, labels = [], []
         for ax_info in plotted_axes_info: # Collect handles from all plotted axes
             h, l = ax_info['ax'].get_legend_handles_labels()
@@ -686,14 +705,35 @@ def create_24h_forecast_section(
             l_pos = standard_legend_cfg.get('position', 'best')
             legend_font_properties = {'weight': std_legend_fw}
 
+            # New: Configuration for legend frame
+            legend_frame_on = standard_legend_cfg.get('frame_on', False)
+            legend_frame_alpha = standard_legend_cfg.get('frame_alpha', 0.5) # Default alpha for semi-transparency
+            legend_frame_face_color = standard_legend_cfg.get('frame_face_color', 'white')
+            legend_frame_edge_color = standard_legend_cfg.get('frame_edge_color', 'grey')
+
+            legend_obj = None # Initialize legend object
+            
             if l_pos == 'bottom':
-                fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.05), ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, frameon=False)
+                legend_obj = fig.legend(handles, labels, loc='upper center', bbox_to_anchor=(0.5, 0.05), 
+                                        ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, 
+                                        frameon=legend_frame_on) # type: ignore
                 fig.subplots_adjust(bottom=0.2) 
             elif l_pos == 'top':
-                fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.95), ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, frameon=False)
+                legend_obj = fig.legend(handles, labels, loc='lower center', bbox_to_anchor=(0.5, 0.95), 
+                                        ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, 
+                                        frameon=legend_frame_on) # type: ignore
                 fig.subplots_adjust(top=0.8) 
             else: 
-                ax_primary_left.legend(handles, labels, loc=l_pos, ncol=ncol, fontsize=l_fontsize, prop=legend_font_properties, frameon=False)
+                legend_obj = ax_primary_left.legend(handles, labels, loc=l_pos, ncol=ncol, fontsize=l_fontsize, 
+                                                    prop=legend_font_properties, frameon=legend_frame_on) # type: ignore
+            
+            if legend_obj:
+                legend_obj.set_zorder(25) # Set high zorder upon creation.
+                if legend_frame_on and legend_obj.get_frame() is not None:
+                    frame = legend_obj.get_frame()
+                    frame.set_alpha(legend_frame_alpha)
+                    frame.set_facecolor(legend_frame_face_color)
+                    frame.set_edgecolor(legend_frame_edge_color)
 
     # Wind Arrows
     wind_arrow_cfg = graph_plot_config.get('wind_arrows', {})
@@ -734,6 +774,32 @@ def create_24h_forecast_section(
         fig.tight_layout(pad=0.5)
     # If legend was placed with subplots_adjust, tight_layout might fight it.
     # bbox_inches='tight' in savefig is often the best for final output.
+
+    # --- Legend Workaround: Start ---
+    # Move all legends created with ax.legend() to be children of the last (top-most) axis.
+    # Also ensure any legends created with fig.legend() have a high z-order.
+    all_figure_axes = fig.get_axes()
+    if all_figure_axes: # Check if there are any axes in the figure
+        top_most_axis = all_figure_axes[-1] # Last axis is generally drawn on top
+        
+        legends_from_axes = []
+        # Collect legends from individual axes
+        for current_axis_in_loop in all_figure_axes:
+            ax_legend_obj = current_axis_in_loop.get_legend()
+            if ax_legend_obj:
+                legends_from_axes.append(ax_legend_obj)
+                ax_legend_obj.remove() # Detach from original axis
+
+        # Re-parent collected axes legends to the top-most axis
+        for legend_to_reparent in legends_from_axes:
+            top_most_axis.add_artist(legend_to_reparent)
+            legend_to_reparent.set_zorder(25) # Ensure high z-order on the new parent
+
+    # Ensure figure-level legends also have a high z-order
+    if hasattr(fig, 'legends') and fig.legends:
+        for fig_level_legend in fig.legends:
+            fig_level_legend.set_zorder(25)
+    # --- Legend Workaround: End ---
 
     # Finalize and Paste
     try:

@@ -69,6 +69,10 @@ graph_24h_forecast_config:
       columns: 3          # Number of columns in the legend
       fontsize: 9         # Specific font size for legend text
       font_weight: "bold" # Font weight for legend text (e.g., "bold", "normal")
+      frame_on: true
+      frame_alpha: 0.6
+      frame_face_color: "white"
+      frame_edge_color: "darkgrey"
 
     # Peak value display (renders text directly on graph, e.g., "Wind: 10.5 m/s")
     # If enabled, it typically replaces the standard_legend.
@@ -83,7 +87,7 @@ graph_24h_forecast_config:
       font_weight: "bold"
       axis_line_y_step: 0.085            # Vertical step for the next line, in fraction of axes height (e.g., 0.06 means 6% down)
       text_bbox:                  # Bounding box style for each text line
-        enabled: true
+        enabled: false
         face_color: "white"
         alpha: 0.75
         edge_color: "none"        # Use "none" or a light color like "lightgrey"
