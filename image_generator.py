@@ -370,7 +370,6 @@ def create_24h_forecast_section(
                 project_root_path_for_icons
             )
 
-
     # Process Right Axis Series
     is_first_on_right = True
     ax_primary_right = None # Initialize primary right axis
@@ -757,13 +756,14 @@ def create_24h_forecast_section(
         if 'fig' in locals() and fig: plt.close(fig)
 
 
-def create_daily_forecast_display(weather_data_daily, project_root_path, fonts, colors):
+def create_daily_forecast_display(weather_data_daily, temperature_unit_pref: str, project_root_path: str, fonts: dict, colors: dict):
     """Draws the daily forecast section onto the global image_canvas."""
     global image_canvas, draw_context # Uses global image_canvas and draw_context
 
     daily_start_x = 25
     daily_start_y = 270
     image_width = image_canvas.width
+    temp_unit_symbol = "°" + temperature_unit_pref.upper()
 
     if not weather_data_daily:
         draw_context.text((daily_start_x, daily_start_y + 50), "Daily data unavailable", font=fonts['regular'], fill=(255,0,0))
@@ -806,24 +806,41 @@ def create_daily_forecast_display(weather_data_daily, project_root_path, fonts, 
                  paste_pos = (daily_x - 12, daily_start_y + 5)
                  draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="grey")
 
-        high_temp = day_forecast.get('temp_max', '?°')
-        low_temp = day_forecast.get('temp_min', '?°')
+        # Format numerical data for display
+        high_temp_val = day_forecast.get('temp_max')
+        low_temp_val = day_forecast.get('temp_min')
+        high_temp_str = f"{high_temp_val:.0f}" if high_temp_val is not None else "?"
+        low_temp_str = f"{low_temp_val:.0f}" if low_temp_val is not None else "?"
+        temp_text = f"{high_temp_str}{temp_unit_symbol} / {low_temp_str}{temp_unit_symbol}"
+
         temp_y_pos = daily_start_y + 90
-        temp_text = f"{high_temp} / {low_temp}"
         temp_text_x = daily_x + 10
         draw_context.text((temp_text_x, temp_y_pos), temp_text, font=fonts['small'], fill=colors['text'])
 
-        rain_text = day_forecast.get('rain', '? mm')
+        rain_val = day_forecast.get('rain')
+        rain_text = f"{rain_val:.1f} mm" if rain_val is not None else "? mm"
         rain_y_pos = temp_y_pos + 20
         rain_text_x = daily_x + 10
         draw_context.text((rain_text_x, rain_y_pos), rain_text, font=fonts['small'], fill=colors['blue'])
 
-        wind_str = day_forecast.get('wind_speed', '? m/s')
+        wind_val = day_forecast.get('wind_speed')
+        # Assuming wind speed is always m/s from the data source for daily.
+        # If daily wind speed could also be in other units and need conversion,
+        # this would require more complex unit handling similar to temperature.
+        wind_str = f"{wind_val:.1f} m/s" if wind_val is not None and isinstance(wind_val, (int, float)) else "? m/s"
         wind_y_pos = rain_y_pos + 20
         wind_text_x = daily_x + 10
         draw_context.text((wind_text_x, wind_y_pos), wind_str, font=fonts['small'], fill=colors['green'])
 
-        uvi_str = day_forecast.get('uvi', 'UV ?')
+        uvi_val = day_forecast.get('uvi')
+        uvi_str = ""
+        if uvi_val is not None:
+            if isinstance(uvi_val, (int, float)):
+                uvi_str = f"UV {uvi_val:.1f}"
+            else: # Should not happen if data is clean
+                uvi_str = f"UV {uvi_val}"
+        else:
+            uvi_str = "UV ?"
         uvi_y_pos = wind_y_pos + 20
         uvi_text_x = daily_x + 10
         draw_context.text((uvi_text_x, uvi_y_pos), uvi_str, font=fonts['small'], fill=colors['orange'])
@@ -890,7 +907,7 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
 
     # --- Current Weather Section ---
     current_weather_width = 150
-    current_temp_text = weather_data.current.get('temp', '?°C')
+    current_temp_text = weather_data.current.get('temp_display', '?°') # Use temp_display
     temp_x = 25
     temp_y = 10
     draw_context.text((temp_x, temp_y), current_temp_text, font=fonts['temp'], fill=colors['text'])
@@ -925,9 +942,9 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
     details_x = 20
     line_height = 25
     details = [
-        f"Feel  : {weather_data.current.get('feels_like', '?°C')}",
-        f"Hum.: {weather_data.current.get('humidity', '?%')}",
-        f"Wind: {weather_data.current.get('wind_speed', '? m/s')}",
+        f"Feel  : {weather_data.current.get('feels_like_display', '?°')}",
+        f"Hum.: {weather_data.current.get('humidity_display', '?%')}",
+        f"Wind: {weather_data.current.get('wind_speed_display', '? m/s')}",
     ]
     for i, text in enumerate(details):
         draw_context.text((details_x, details_y + i * line_height), text, font=fonts['regular'], fill=colors['text'])
@@ -950,7 +967,7 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
         project_root_path, main_icon_provider_pref) # Pass necessary paths/configs
 
     # --- Daily Forecast Section ---
-    create_daily_forecast_display(weather_data.daily, project_root_path, fonts, colors)
+    create_daily_forecast_display(weather_data.daily, weather_data.temperature_unit, project_root_path, fonts, colors)
 
     # --- Save Final Image ---
     try:

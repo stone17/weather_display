@@ -1,9 +1,9 @@
-# c:\Toolz\weather_display\config.yaml
 latitude: 51.5074  # London Latitude
 longitude: -0.1278 # London Longitude
 server_ip: "192.168.1.18" # Enclosed in quotes if it might be misinterpreted
 weather_provider: "smhi"
 icon_provider: "openweathermap"
+temperature_unit: "C"  # Options: "C" (Celsius) or "F" (Fahrenheit)
 
 # Optional: List of supplemental weather data providers
 supplemental_providers:

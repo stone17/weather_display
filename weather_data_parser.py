@@ -6,7 +6,8 @@ class WeatherData:
     """
     Parses and prepares raw weather data for display.
     """
-    def __init__(self, current_raw, hourly_raw, daily_raw, icon_provider_preference, graph_config=None):
+    def __init__(self, current_raw, hourly_raw, daily_raw, temp_unit_pref,
+                 icon_provider_preference, graph_config=None):
         self.current_raw = current_raw if current_raw is not None else {}
         self.hourly_raw = hourly_raw if hourly_raw is not None else []
         self.daily_raw = daily_raw if daily_raw is not None else []
@@ -14,8 +15,19 @@ class WeatherData:
         self.graph_config = graph_config if graph_config is not None else {}
 
         self.current = self._parse_current_weather()
-        self.hourly = self._parse_hourly_forecast()
-        self.daily = self._parse_daily_forecast()
+        self.hourly = self._parse_hourly_forecast()  # Note: Parsing, no conversion yet.
+        self.daily = self._parse_daily_forecast()    # Same here.
+        self.temperature_unit = temp_unit_pref.upper()
+        self._convert_temperatures_if_needed() # Conversion happens after parsing.
+
+    def _convert_temperatures_if_needed(self):
+        if self.temperature_unit == "F":
+            self.current['temp_value'] = self._celsius_to_fahrenheit(self.current.get('temp_value',0))
+            self.current['feels_like_value'] = self._celsius_to_fahrenheit(self.current.get('feels_like_value',0))
+            self.hourly = self._convert_hourly_temps(self.hourly)
+            self.daily = self._convert_daily_temps(self.daily)
+        self._prepare_current_weather_display_strings()
+
 
     def has_sufficient_data(self):
         """Checks if essential data components are present."""
@@ -50,23 +62,44 @@ class WeatherData:
         if not self.current_raw:
             return {}
             
-        parsed_current = {}
-        temp_val = self.current_raw.get('temp')
-        parsed_current['temp'] = f"{temp_val:.1f}°C" if temp_val is not None else "?°C"
+        current_parsed = {}
+        current_parsed['temp_value'] = self.current_raw.get('temp')
+        current_parsed['feels_like_value'] = self.current_raw.get('feels_like')
+        current_parsed['humidity'] = self.current_raw.get('humidity')
+        current_parsed['wind_speed'] = self.current_raw.get('wind_speed')
+        # Format strings later in _format_temperature_strings()
 
         weather_info_list = self.current_raw.get('weather', [])
         weather_info = weather_info_list[0] if weather_info_list else {}
-        parsed_current['icon_identifier'] = self._select_icon_identifier(weather_info)
+        current_parsed['icon_identifier'] = self._select_icon_identifier(weather_info)
+        return current_parsed
 
-        feels_like_val = self.current_raw.get('feels_like')
-        parsed_current['feels_like'] = f"{feels_like_val:.1f}°C" if feels_like_val is not None else "?°C"
+    def _prepare_current_weather_display_strings(self):
+        """
+        Formats display strings for self.current weather data using the correct unit.
+        Original numerical values (e.g., temp_value) remain untouched.
+        Hourly and Daily data are NOT formatted here; they retain numerical values.
+        """
+        unit_symbol = "°" + self.temperature_unit
 
-        humidity_val = self.current_raw.get('humidity')
-        parsed_current['humidity'] = f"{humidity_val}%" if humidity_val is not None else "?%"
+        temp_val = self.current.get('temp_value')
+        self.current['temp_display'] = self._format_temp(temp_val, unit_symbol) if temp_val is not None else f"?{unit_symbol}"
 
-        wind_speed_val = self.current_raw.get('wind_speed')
-        parsed_current['wind_speed'] = f"{wind_speed_val:.1f} m/s" if wind_speed_val is not None else "? m/s"
-        return parsed_current
+        feels_like_val = self.current.get('feels_like_value')
+        self.current['feels_like_display'] = self._format_temp(feels_like_val, unit_symbol) if feels_like_val is not None else f"?{unit_symbol}"
+
+        humidity_val = self.current.get('humidity')
+        self.current['humidity_display'] = f"{humidity_val}%" if humidity_val is not None else "?%"
+
+        wind_speed_val = self.current.get('wind_speed')
+        # Assuming wind speed unit is m/s from provider and doesn't change with C/F config.
+        # If wind speed units can also change, this would need more logic.
+        self.current['wind_speed_display'] = f"{wind_speed_val:.1f} m/s" if wind_speed_val is not None else "? m/s"
+
+
+    def _format_temp(self, temp_value, unit_str, decimals=1):
+        """Formats a temperature value with the specified unit and decimals."""
+        return f"{temp_value:.{decimals}f}{unit_str}"
 
     def _parse_hourly_forecast(self):
         """ Parses hourly data for the graph, ensuring valid timestamps. """
@@ -108,8 +141,7 @@ class WeatherData:
                 'weather_google_icon_uri': h_data.weather_google_icon_uri # Added for graph symbols
             }
             parsed_hourly.append(entry)
-        return parsed_hourly
-
+        return parsed_hourly    
 
     def _parse_daily_forecast(self):
         parsed_daily = []
@@ -124,24 +156,35 @@ class WeatherData:
             
             entry['icon_identifier'] = self._select_icon_identifier(day_data) # Pass the object itself
 
-            temp_max_val = day_data.temp_max
-            entry['temp_max'] = f"{temp_max_val:.0f}°" if temp_max_val is not None else "?°"
-            temp_min_val = day_data.temp_min
-            entry['temp_min'] = f"{temp_min_val:.0f}°" if temp_min_val is not None else "?°"
-            
-            rain_val = day_data.rain
-            entry['rain'] = f"{rain_val:.1f} mm" if rain_val is not None else "? mm"
-            
-            wind_val = day_data.wind_speed
-            if wind_val is not None and isinstance(wind_val, (int, float)):
-                entry['wind_speed'] = f"{wind_val:.1f} m/s"
-            else:
-                entry['wind_speed'] = f"{wind_val} m/s" if wind_val is not None else "? m/s"
+            # Store numerical values directly. Formatting will be done in image_generator.
+            entry['temp_max'] = day_data.temp_max
+            entry['temp_min'] = day_data.temp_min
+            entry['rain'] = day_data.rain
+            entry['wind_speed'] = day_data.wind_speed
+            entry['uvi'] = day_data.uvi
+            # Other non-numerical fields from DailyDataPoint can be added if needed for display
+            entry['summary'] = day_data.summary
+            entry['pop'] = day_data.pop # Probability of precipitation
 
-            uvi_val = day_data.uvi
-            if uvi_val is not None and isinstance(uvi_val, (int, float)):
-                entry['uvi'] = f"UV {uvi_val:.1f}"
-            else:
-                entry['uvi'] = f"UV {uvi_val}" if uvi_val is not None else "UV ?"
             parsed_daily.append(entry)
         return parsed_daily
+
+    def _celsius_to_fahrenheit(self, celsius):
+        """Converts Celsius to Fahrenheit."""
+        if celsius is None:
+            return None
+        return (celsius * 9/5) + 32
+
+    def _convert_hourly_temps(self, hourly_data):
+        for entry in hourly_data:
+            if 'temp' in entry and isinstance(entry['temp'], (int, float)):
+                entry['temp'] = self._celsius_to_fahrenheit(entry['temp'])
+            # Feels-like could be added here if needed.
+        return hourly_data
+
+    def _convert_daily_temps(self, daily_data):
+        for entry in daily_data:
+            for temp_key in ['temp_max', 'temp_min']:
+                if temp_key in entry and isinstance(entry[temp_key], (int, float)):
+                    entry[temp_key] = self._celsius_to_fahrenheit(entry[temp_key])
+        return daily_data

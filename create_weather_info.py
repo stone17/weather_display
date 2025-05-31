@@ -52,6 +52,7 @@ async def main():
     print(f"Using icon provider preference: {icon_provider_preference}")
     graph_cfg_for_parser = config.get('graph_24h_forecast_config', {})
     weather_data_obj = prepare_weather_data(current_raw, hourly_raw, daily_raw,
+                                            config.get("temperature_unit", "C"),
                                             icon_provider_preference,
                                             graph_cfg_for_parser)
 
@@ -119,9 +120,9 @@ async def fetch_weather_data(app_config, proj_root):
     return provider.get_current_data(), provider.get_hourly_data(), provider.get_daily_data()
 
 
-def prepare_weather_data(current_raw, hourly_raw, daily_raw, icon_pref, graph_cfg=None):
+def prepare_weather_data(current_raw, hourly_raw, daily_raw, temp_unit, icon_pref, graph_cfg=None):
     """Parses raw weather data into a WeatherData object."""
-    return WeatherData(current_raw, hourly_raw, daily_raw, icon_pref, graph_config=graph_cfg)
+    return WeatherData(current_raw, hourly_raw, daily_raw, temp_unit, icon_pref, graph_config=graph_cfg)
 
 
 def process_and_upload_image(image_obj, app_config):
