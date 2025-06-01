@@ -1,9 +1,14 @@
 latitude: 51.5074  # London Latitude
 longitude: -0.1278 # London Longitude
 server_ip: "192.168.1.18" # Enclosed in quotes if it might be misinterpreted
-weather_provider: "smhi"
-icon_provider: "openweathermap"
+weather_provider: "smhi" # Options: see provider_list
+icon_provider: "openweathermap" # Options: see icon_provider_list
 temperature_unit: "C"  # Options: "C" (Celsius) or "F" (Fahrenheit)
+
+# List of all available icon providers in the system
+icon_provider_list:
+  - "openweathermap"
+  - "google"
 
 # Optional: List of supplemental weather data providers
 supplemental_providers:
@@ -28,6 +33,8 @@ parameter_list:
   - "humidity"
   - "uvi"
   - "wind_speed"
+  - "wind_deg"
+  - "wind_gust"
   - "rain"
   - "snow"
 
