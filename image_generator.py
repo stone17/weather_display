@@ -1,7 +1,5 @@
 # image_generator.py
 import os
-import requests
-import hashlib
 import io
 from PIL import Image, ImageDraw, ImageFont
 try:
@@ -20,62 +18,37 @@ from datetime import datetime, timedelta, timezone
 # If WeatherData is needed here for type hinting, it would be imported.
 # For now, it's passed as an object, so direct import might not be strictly necessary
 # from weather_data_parser import WeatherData # If type hinting WeatherData object
+from icon_handling import download_and_cache_icon # Moved to icon_handling.py
 
 # Global variable for image, used by create_24h_forecast_section and create_daily_forecast_display
 # This will be initialized within generate_weather_image
 image_canvas = None
 draw_context = None
 
-def download_and_cache_icon(icon_identifier, project_root_path, icon_cache_dir="icon_cache"):
+DEFAULT_ICON_DISPLAY_CONFIGS = {
+    "daily_display": {
+        "google": {"width": 60, "height": 60, "x_offset": 0, "y_offset": 20},
+        "openweathermap": {"width": 100, "height": 100, "x_offset": -12, "y_offset": 5},
+        "default": {"width": 80, "height": 80, "x_offset": -10, "y_offset": 10}
+    },
+    "current_display": {
+        "google": {"width": 90, "height": 90, "x_offset": 0, "y_offset": 45},
+        "openweathermap": {"width": 100, "height": 100, "x_offset": -15, "y_offset": 35},
+        "default": {"width": 90, "height": 90, "x_offset": -10, "y_offset": 40}
+    },
+    "graph_icons": {
+        "google_scale_factor": 0.8,
+        "openweathermap_scale_factor": 1.0,
+        "default_scale_factor": 1.0
+    }
+}
+
+def _load_image_from_path(image_path):
     """
-    Downloads and caches weather icons.
-    Fetches standard 50x50 (/img/w/) for OpenWeatherMap codes.
-    Handles full URLs (e.g., from Google).
-    Generates filename based on identifier (code or hash of URL).
+    Loads an image from path. Assumes raster formats like PNG that PIL can handle directly.
     """
-    full_icon_cache_dir = os.path.join(project_root_path, icon_cache_dir)
-    os.makedirs(full_icon_cache_dir, exist_ok=True)
-
-    is_url = isinstance(icon_identifier, str) and icon_identifier.startswith('http')
-    icon_url = None
-    icon_filename = None
-
-    if is_url:
-        icon_url = icon_identifier
-        if not icon_url.lower().endswith('.png'):
-            print(f"Warning: Google icon URI '{icon_identifier}' doesn't end with .png. Appending.")
-            icon_url += '.png'
-        base_url_for_hash = icon_url.rsplit('.png', 1)[0]
-        filename_base = hashlib.md5(base_url_for_hash.encode()).hexdigest()
-        icon_filename = f"google_{filename_base}.png"
-    elif isinstance(icon_identifier, str) and icon_identifier != 'na':
-        icon_code = icon_identifier
-        icon_url = f"http://openweathermap.org/img/w/{icon_code}.png"
-        icon_filename = f"{icon_code}.png"
-    else:
-        print(f"Skipping download for invalid icon identifier: {icon_identifier}")
-        return None
-
-    icon_path = os.path.join(full_icon_cache_dir, icon_filename)
-
-    if os.path.exists(icon_path):
-        return icon_path
-
-    print(f"Downloading icon from: {icon_url}")
-    try:
-        response = requests.get(icon_url, timeout=15)
-        response.raise_for_status()
-        with open(icon_path, 'wb') as f:
-            f.write(response.content)
-        print(f"Icon downloaded and cached: {icon_path}")
-        return icon_path
-    except requests.exceptions.RequestException as e:
-        print(f"Error downloading icon {icon_identifier}: {e}")
-    except OSError as e:
-        print(f"Error saving icon {icon_identifier}: {e}")
-    except Exception as e:
-        print(f"Unexpected error downloading/saving icon {icon_identifier}: {e}")
-    return None
+    # SVG handling code removed as icon_handling.py is expected to provide raster images.
+    return Image.open(image_path).convert("RGBA")
 
 def _plot_weather_symbols_for_series(
     current_ax, # The Matplotlib axis object for the current series
@@ -84,7 +57,8 @@ def _plot_weather_symbols_for_series(
     parsed_hourly_data_all, # Full list of hourly data dicts (contains icon codes)
     series_symbol_config, # The 'weather_symbols' dict from the current series' config
     icon_provider_preference_from_config, # Global icon preference ("google" or "openweathermap")
-    project_root_path_for_icons # Path to project root for icon caching
+    project_root_path_for_icons, # Path to project root for icon caching
+    app_config_for_icons # Full app config or relevant icon_configs section
 ):
     """
     Plots weather symbols on the graph for a specific series.
@@ -92,10 +66,19 @@ def _plot_weather_symbols_for_series(
     if not series_times or not series_values:
         return # No data in the series to attach symbols to
 
-    prefer_day_owm = series_symbol_config.get('prefer_day_owm_icons', True)
+    # prefer_day_owm = series_symbol_config.get('prefer_day_owm_icons', True) # This setting will no longer affect graph icons
     icon_size_px = series_symbol_config.get('icon_size_pixels', 20)
     vertical_offset_px = series_symbol_config.get('vertical_offset_pixels', 10)
     time_interval_hrs = series_symbol_config.get('time_interval_hours', 3)
+
+    # Get graph icon scale factor from app_config_for_icons
+    icon_configs_all = app_config_for_icons.get('icon_configs', DEFAULT_ICON_DISPLAY_CONFIGS)
+    graph_icon_configs = icon_configs_all.get('graph_icons', DEFAULT_ICON_DISPLAY_CONFIGS['graph_icons'])
+    provider_scale_factor = graph_icon_configs.get(
+        f"{icon_provider_preference_from_config}_scale_factor", # e.g., "google_scale_factor"
+        graph_icon_configs.get('default_scale_factor', 1.0)
+    )
+    effective_icon_size_px = int(icon_size_px * provider_scale_factor)
     
     # Create a lookup for the current series' Y-values by timestamp for quick access
     current_series_y_values_map = {dt: val for dt, val in zip(series_times, series_values)}
@@ -109,31 +92,38 @@ def _plot_weather_symbols_for_series(
 
             if y_data_val is not None: # If this timestamp exists in the current series
                 raw_owm_icon_code = h_data_dict.get('weather_icon')
-                google_uri = h_data_dict.get('weather_google_icon_uri')
-                chosen_icon_id_for_graph = None
+                # weather_description = h_data_dict.get('weather_description') # Available if needed for more complex mapping
 
-                # Select icon based on preference and availability
-                if icon_provider_preference_from_config == "google" and google_uri:
-                    chosen_icon_id_for_graph = google_uri
-                elif raw_owm_icon_code and raw_owm_icon_code != 'na':
-                    if prefer_day_owm and 'n' in raw_owm_icon_code: # Convert night OWM icons to day if preferred
-                        chosen_icon_id_for_graph = raw_owm_icon_code.replace("n", "d")
-                    else:
-                        chosen_icon_id_for_graph = raw_owm_icon_code
-                if chosen_icon_id_for_graph:
-                    icon_file_path = download_and_cache_icon(chosen_icon_id_for_graph, project_root_path_for_icons, "icon_cache")
+                # Always use the OWM icon code as provided by the parsed hourly data,
+                # as it should already be day/night specific.
+                if raw_owm_icon_code and raw_owm_icon_code != 'na':
+                    chosen_owm_icon_code_for_graph = raw_owm_icon_code
+                else:
+                    chosen_owm_icon_code_for_graph = None                
+                if chosen_owm_icon_code_for_graph:
+                    icon_file_path = download_and_cache_icon(
+                        chosen_owm_icon_code_for_graph, 
+                        icon_provider_preference_from_config, # This is the global provider preference
+                        project_root_path_for_icons, 
+                        "icon_cache"
+                    )
                     if icon_file_path:
                         try:
-                            pil_icon = Image.open(icon_file_path).convert("RGBA")
+                            pil_icon = _load_image_from_path(icon_file_path)
+                            if not pil_icon: 
+                                print(f"Warning: Failed to load/convert icon {icon_file_path} for graph.")
+                                continue # Skip if loading/conversion failed
+
                             original_icon_w, _ = pil_icon.size
-                            zoom_factor = icon_size_px / original_icon_w if original_icon_w > 0 else 1.0
+                            zoom_factor = effective_icon_size_px / original_icon_w if original_icon_w > 0 else 1.0
                             imagebox = OffsetImage(pil_icon, zoom=zoom_factor)
-                            ab = AnnotationBbox(imagebox, (current_h_dt, y_data_val),
+                            
+                            ab = AnnotationBbox(imagebox, (current_h_dt, y_data_val), # type: ignore
                                                 xybox=(0., vertical_offset_px), xycoords='data', # xy is data coords
                                                 boxcoords="offset points", frameon=False, pad=0, zorder=10) # xybox is offset in points
                             current_ax.add_artist(ab)
                         except Exception as e_icon:
-                            print(f"Error processing/plotting graph icon {chosen_icon_id_for_graph} for series at {current_h_dt}: {e_icon}")
+                            print(f"Error processing/plotting graph icon {chosen_owm_icon_code_for_graph} (provider: {icon_provider_preference_from_config}) for series at {current_h_dt}: {e_icon}")
 
 def create_24h_forecast_section(
     parsed_hourly_data,
@@ -141,7 +131,7 @@ def create_24h_forecast_section(
     x_pos, y_pos, # Renamed for clarity, position to paste the graph
     width, height, # Dimensions for the graph area
     default_font_path, base_font_size, # Base font settings
-    project_root_path_for_icons, icon_provider_preference_from_config # For icon handling
+    project_root_path_for_icons, icon_provider_preference_from_config, app_config # Added app_config
 ):
     """Creates the 24-hour forecast section (graph) on the image_canvas."""
     global image_canvas # Uses global image_canvas
@@ -367,7 +357,8 @@ def create_24h_forecast_section(
                 parsed_hourly_data, # Full hourly data list
                 series_weather_symbols_cfg,
                 icon_provider_preference_from_config,
-                project_root_path_for_icons
+                project_root_path_for_icons,
+                app_config # Pass app_config for icon scaling
             )
 
     # Process Right Axis Series
@@ -494,7 +485,8 @@ def create_24h_forecast_section(
                 parsed_hourly_data, # Full hourly data list
                 series_weather_symbols_cfg,
                 icon_provider_preference_from_config,
-                project_root_path_for_icons
+                project_root_path_for_icons,
+                app_config # Pass app_config for icon scaling
             )
 
     # Update axis information in processed_series_data after all axes are created
@@ -822,7 +814,14 @@ def create_24h_forecast_section(
         if 'fig' in locals() and fig: plt.close(fig)
 
 
-def create_daily_forecast_display(weather_data_daily, temperature_unit_pref: str, project_root_path: str, fonts: dict, colors: dict):
+def create_daily_forecast_display(
+    weather_data_daily, 
+    temperature_unit_pref: str, 
+    project_root_path: str, 
+    icon_provider_preference: str, 
+    app_config: dict, # Added app_config to get icon display properties
+    fonts: dict, colors: dict
+):
     """Draws the daily forecast section onto the global image_canvas."""
     global image_canvas, draw_context # Uses global image_canvas and draw_context
 
@@ -830,6 +829,11 @@ def create_daily_forecast_display(weather_data_daily, temperature_unit_pref: str
     daily_start_y = 270
     image_width = image_canvas.width
     temp_unit_symbol = "°" + temperature_unit_pref.upper()
+
+    # Get daily icon display configurations
+    icon_configs_all = app_config.get('icon_configs', DEFAULT_ICON_DISPLAY_CONFIGS)
+    daily_icon_display_map = icon_configs_all.get('daily_display', DEFAULT_ICON_DISPLAY_CONFIGS['daily_display'])
+    icon_props = daily_icon_display_map.get(icon_provider_preference, daily_icon_display_map['default'])
 
     if not weather_data_daily:
         draw_context.text((daily_start_x, daily_start_y + 50), "Daily data unavailable", font=fonts['regular'], fill=(255,0,0))
@@ -843,34 +847,38 @@ def create_daily_forecast_display(weather_data_daily, temperature_unit_pref: str
         day_str = day_forecast.get('day_name', '???')
         draw_context.text((daily_x + 20, daily_start_y - 5), day_str, font=fonts['heading'], fill=colors['text'])
 
-        icon_identifier_to_download = day_forecast.get('icon_identifier')
-        if not icon_identifier_to_download:
-            print(f"Warning: No suitable daily icon identifier found for day {i}.")
+        owm_icon_code = day_forecast.get('weather_icon') # Expecting OWM icon code
+        if not owm_icon_code or owm_icon_code == 'na':
+            original_code_debug = day_forecast.get('original_provider_icon_code', 'N/A')
+            print(f"Warning: No suitable daily icon (OWM code) for day {i}. OWM code: '{owm_icon_code}', Original from provider: '{original_code_debug}'.")
 
-        if icon_identifier_to_download:
-            icon_path = download_and_cache_icon(icon_identifier_to_download, project_root_path)
+        if owm_icon_code and owm_icon_code != 'na':
+            icon_path = download_and_cache_icon(owm_icon_code, icon_provider_preference, project_root_path)
             if icon_path:
                 try:
-                    is_google_icon = isinstance(icon_identifier_to_download, str) and icon_identifier_to_download.startswith('http')
-                    if is_google_icon:
-                        target_icon_size = (60, 60)
-                        paste_pos = (daily_x - 0, daily_start_y + 20)
-                    else:
-                        target_icon_size = (100, 100)
-                        paste_pos = (daily_x - 12, daily_start_y + 5)
-
-                    icon_img = Image.open(icon_path).convert("RGBA")
-                    icon_img = icon_img.resize(target_icon_size, resample=LANCZOS_FILTER)
-                    image_canvas.paste(icon_img, paste_pos, mask=icon_img)
+                    target_icon_size = (icon_props['width'], icon_props['height'])
+                    paste_pos = (daily_x + icon_props['x_offset'], daily_start_y + icon_props['y_offset'])
+                    icon_img = _load_image_from_path(icon_path)
+                    if not icon_img: # Check if loading/conversion failed
+                        print(f"Warning: Failed to load/convert icon {icon_path} for daily forecast (day {i}).")
+                        # Draw a placeholder if it's an SVG and we can't rasterize it here
+                        draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="red", fill="lightgrey")
+                        continue # Skip pasting this icon
+                    
+                    icon_img_resized = icon_img.resize(target_icon_size, resample=LANCZOS_FILTER) # type: ignore
+                    image_canvas.paste(icon_img_resized, paste_pos, mask=icon_img_resized) # type: ignore
                 except Exception as e:
                     print(f"Error displaying daily icon for day {i}: {e}")
-                    target_icon_size = (100, 100)
-                    paste_pos = (daily_x - 12, daily_start_y + 5)
+                    target_icon_size = (icon_props['width'], icon_props['height']) # Fallback size from props
+                    paste_pos = (daily_x + icon_props['x_offset'], daily_start_y + icon_props['y_offset']) # Fallback pos
                     draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="grey")
-            else:
-                 target_icon_size = (100, 100)
-                 paste_pos = (daily_x - 12, daily_start_y + 5)
+            else: # icon_path is None (download failed or skipped by handler)
+                 target_icon_size = (icon_props['width'], icon_props['height'])
+                 paste_pos = (daily_x + icon_props['x_offset'], daily_start_y + icon_props['y_offset'])
                  draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="grey")
+        else: # owm_icon_code is None or 'na'
+            target_icon_size = (icon_props['width'], icon_props['height']); paste_pos = (daily_x + icon_props['x_offset'], daily_start_y + icon_props['y_offset'])
+            draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="grey")
 
         # Format numerical data for display
         high_temp_val = day_forecast.get('temp_max')
@@ -978,31 +986,38 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
     temp_y = 10
     draw_context.text((temp_x, temp_y), current_temp_text, font=fonts['temp'], fill=colors['text'])
 
-    icon_identifier_to_download = weather_data.current.get('icon_identifier')
-    if icon_identifier_to_download:
-        icon_path = download_and_cache_icon(icon_identifier_to_download, project_root_path)
+    # Get icon_provider_preference from the main app_config for consistent icon handling
+    main_icon_provider_pref = app_config.get("icon_provider", "openweathermap").lower()
+
+    owm_icon_code_current = weather_data.current.get('weather_icon') # Expecting OWM icon code
+    # Use the new specific config for display icons (current weather, daily forecast)
+    display_icon_provider_pref = app_config.get("icon_provider_display", "openweathermap").lower()
+
+    # Get current weather icon display configurations
+    icon_configs_all = app_config.get('icon_configs', DEFAULT_ICON_DISPLAY_CONFIGS)
+    current_icon_display_map = icon_configs_all.get('current_display', DEFAULT_ICON_DISPLAY_CONFIGS['current_display'])
+    current_icon_props = current_icon_display_map.get(display_icon_provider_pref, current_icon_display_map['default'])
+    target_icon_size_current = (current_icon_props['width'], current_icon_props['height'])
+    paste_pos_current = (temp_x + current_icon_props['x_offset'], temp_y + current_icon_props['y_offset'])
+
+    if owm_icon_code_current and owm_icon_code_current != 'na':
+        icon_path = download_and_cache_icon(owm_icon_code_current, display_icon_provider_pref, project_root_path)
         if icon_path:
             try:
-                is_google_icon = isinstance(icon_identifier_to_download, str) and icon_identifier_to_download.startswith('http')
-                if is_google_icon:
-                    target_icon_size = (90, 90)
-                    paste_pos = (temp_x - 0, temp_y + 45)
+                icon_image_obj = _load_image_from_path(icon_path) 
+                if not icon_image_obj : 
+                    print(f"Warning: Failed to load/convert icon {icon_path} for current weather.")
+                    draw_context.rectangle((paste_pos_current[0], paste_pos_current[1], paste_pos_current[0] + target_icon_size_current[0], paste_pos_current[1] + target_icon_size_current[1]), outline="red", fill="lightgrey")
                 else:
-                    target_icon_size = (100, 100)
-                    paste_pos = (temp_x - 15, temp_y + 35)
-
-                icon_image_obj = Image.open(icon_path).convert("RGBA") # Renamed to avoid conflict
-                icon_image_obj = icon_image_obj.resize(target_icon_size, resample=LANCZOS_FILTER)
-                image_canvas.paste(icon_image_obj, paste_pos, mask=icon_image_obj)
+                    icon_image_obj_resized = icon_image_obj.resize(target_icon_size_current, resample=LANCZOS_FILTER) # type: ignore
+                    image_canvas.paste(icon_image_obj_resized, paste_pos_current, mask=icon_image_obj_resized) # type: ignore
             except Exception as e:
                 print(f"Error displaying current icon: {e}")
-                target_icon_size = (100, 100)
-                paste_pos = (temp_x - 15, temp_y + 35)
-                draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="grey")
-        else:
-             target_icon_size = (100, 100)
-             paste_pos = (temp_x - 15, temp_y + 35)
-             draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="grey")
+                draw_context.rectangle((paste_pos_current[0], paste_pos_current[1], paste_pos_current[0] + target_icon_size_current[0], paste_pos_current[1] + target_icon_size_current[1]), outline="grey")
+        else: # icon_path is None
+             draw_context.rectangle((paste_pos_current[0], paste_pos_current[1], paste_pos_current[0] + target_icon_size_current[0], paste_pos_current[1] + target_icon_size_current[1]), outline="grey")
+    else: # owm_icon_code_current is None or 'na'
+        draw_context.rectangle((paste_pos_current[0], paste_pos_current[1], paste_pos_current[0] + target_icon_size_current[0], paste_pos_current[1] + target_icon_size_current[1]), outline="grey")
 
     details_y = 155
     details_x = 20
@@ -1023,17 +1038,21 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
     
     graph_specific_config = app_config.get("graph_24h_forecast_config")
 
-    # Get icon_provider_preference from the main app_config for consistent icon handling
-    main_icon_provider_pref = app_config.get("icon_provider", "openweathermap").lower()
+    # Use the new specific config for graph icons
+    graph_icon_provider_pref = app_config.get("icon_provider_graph", "openweathermap").lower()
 
     create_24h_forecast_section(
         weather_data.hourly, graph_specific_config,
         hourly_forecast_x, hourly_forecast_y, hourly_forecast_width, hourly_forecast_height,
-        font_path, graph_base_font_size,
-        project_root_path, main_icon_provider_pref) # Pass necessary paths/configs
+        font_path, graph_base_font_size, # For graph text
+        project_root_path, graph_icon_provider_pref, app_config) # For icons and their scaling
 
     # --- Daily Forecast Section ---
-    create_daily_forecast_display(weather_data.daily, weather_data.temperature_unit, project_root_path, fonts, colors)
+    create_daily_forecast_display(
+        weather_data.daily, weather_data.temperature_unit, 
+        project_root_path, display_icon_provider_pref, app_config, # Pass display_icon_provider_pref
+        fonts, colors
+    )
 
     # --- Save Final Image ---
     try:

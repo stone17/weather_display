@@ -7,11 +7,11 @@ class WeatherData:
     Parses and prepares raw weather data for display.
     """
     def __init__(self, current_raw, hourly_raw, daily_raw, temp_unit_pref,
-                 icon_provider_preference, graph_config=None):
+                 graph_config=None): # Removed icon_provider_preference
         self.current_raw = current_raw if current_raw is not None else {}
         self.hourly_raw = hourly_raw if hourly_raw is not None else []
         self.daily_raw = daily_raw if daily_raw is not None else []
-        self.icon_provider_preference = icon_provider_preference.lower()
+        # self.icon_provider_preference = icon_provider_preference.lower() # Removed
         self.graph_config = graph_config if graph_config is not None else {}
 
         self.current = self._parse_current_weather()
@@ -33,30 +33,11 @@ class WeatherData:
         """Checks if essential data components are present."""
         return bool(self.current and self.hourly and self.daily)
 
-    def _select_icon_identifier(self, weather_source: Union[Dict[str, Any], object]):
-        """
-        Selects the icon identifier (URL or code) based on provider preference.
-        Accepts either a dictionary (for current weather's 'weather' item)
-        or a HourlyDataPoint/DailyDataPoint object.
-        Always attempts to return a 'day' version for OWM icons.
-        """
-        if not weather_source:
-            return None
-
-        if isinstance(weather_source, dict):
-            google_icon_uri = weather_source.get('google_icon_uri')
-            owm_icon_code = weather_source.get('icon')
-        else: # Assumes HourlyDataPoint or DailyDataPoint object
-            google_icon_uri = getattr(weather_source, 'weather_google_icon_uri', None)
-            owm_icon_code = getattr(weather_source, 'weather_icon', None)
-
-        if self.icon_provider_preference == "google" and google_icon_uri:
-            return google_icon_uri
-        elif owm_icon_code and owm_icon_code != 'na':
-            if 'n' in owm_icon_code:
-                return owm_icon_code.replace("n", "d")
-            return owm_icon_code
-        return None
+    # _select_icon_identifier method is removed.
+    # Individual data parsers (e.g., GoogleWeatherFetcher, OpenWeatherMapFetcher)
+    # are now responsible for populating 'weather_icon' with a standardized OWM icon code.
+    # The choice of downloading Google vs. OWM icons will be made in image_generator.py
+    # based on the global icon_provider config.
 
     def _parse_current_weather(self):
         if not self.current_raw:
@@ -71,7 +52,8 @@ class WeatherData:
 
         weather_info_list = self.current_raw.get('weather', [])
         weather_info = weather_info_list[0] if weather_info_list else {}
-        current_parsed['icon_identifier'] = self._select_icon_identifier(weather_info)
+        # Expecting OWM icon code directly from the raw data (e.g., weather[0]['icon'] from OWM)
+        current_parsed['weather_icon'] = weather_info.get('icon')
         return current_parsed
 
     def _prepare_current_weather_display_strings(self):
@@ -107,6 +89,19 @@ class WeatherData:
         if not self.hourly_raw:
             return []
 
+        # Create a quick lookup for daily sunrise/sunset from self.daily_raw
+        # self.daily_raw is a list of DailyDataPoint objects
+        daily_sun_events_map = {}
+        if self.daily_raw:
+            for day_data_point_raw in self.daily_raw:
+                # Ensure the raw daily data point has 'dt', 'sunrise', and 'sunset' attributes
+                if hasattr(day_data_point_raw, 'dt') and day_data_point_raw.dt and \
+                   hasattr(day_data_point_raw, 'sunrise') and day_data_point_raw.sunrise and \
+                   hasattr(day_data_point_raw, 'sunset') and day_data_point_raw.sunset:
+                    
+                    day_date_key = datetime.fromtimestamp(day_data_point_raw.dt, tz=timezone.utc).date()
+                    daily_sun_events_map[day_date_key] = (day_data_point_raw.sunrise, day_data_point_raw.sunset)
+
         hours_to_display = self.graph_config.get('graph_time_range_hours', 24)
         for h_data in self.hourly_raw[:hours_to_display]:
             # h_data is an HourlyDataPoint object, access attributes directly
@@ -126,6 +121,22 @@ class WeatherData:
                 # print(f"Warning: Skipping hourly data point with year <= 1970: {dt_obj}")
                 continue
 
+            current_owm_icon = h_data.weather_icon
+            adjusted_owm_icon = current_owm_icon # Start with the provided icon
+
+            # Adjust icon for day/night if it's a daytime icon and it's actually night
+            if current_owm_icon and current_owm_icon.endswith('d'):
+                sunrise_ts, sunset_ts = daily_sun_events_map.get(dt_obj.date(), (None, None))
+
+                if sunrise_ts and sunset_ts:
+                    # dt_val is already a UTC timestamp
+                    if not (sunrise_ts <= dt_val < sunset_ts): # It's nighttime
+                        adjusted_owm_icon = current_owm_icon[:-1] + 'n'
+                else:
+                    # Fallback: simple hour-based day/night if no sun events from daily data
+                    if not (6 <= dt_obj.hour < 18): # Crude approximation of night (6 AM to 6 PM UTC as day)
+                        adjusted_owm_icon = current_owm_icon[:-1] + 'n'
+
             entry = {
                 'dt': dt_obj,
                 'temp': h_data.temp,
@@ -137,8 +148,8 @@ class WeatherData:
                 'wind_gust': h_data.wind_gust,
                 'rain': h_data.rain_1h,
                 'snow': h_data.snow_1h,
-                'weather_icon': h_data.weather_icon, # Added for graph symbols
-                'weather_google_icon_uri': h_data.weather_google_icon_uri # Added for graph symbols
+                'weather_icon': adjusted_owm_icon, # Use the adjusted icon
+                # 'weather_google_icon_uri' is removed; parsers should provide OWM code in weather_icon
             }
             parsed_hourly.append(entry)
         return parsed_hourly    
@@ -154,10 +165,11 @@ class WeatherData:
             dt_val = day_data.dt # day_data is DailyDataPoint
             entry['day_name'] = datetime.fromtimestamp(dt_val).strftime('%a') if dt_val else '???'
 
-            entry['icon_identifier'] = self._select_icon_identifier(day_data)
+            # Expecting OWM icon code directly from day_data.weather_icon
+            entry['weather_icon'] = getattr(day_data, 'weather_icon', None)
             entry['original_provider_icon_code'] = None # Initialize
 
-            if entry['icon_identifier'] is None:
+            if not entry['weather_icon'] or entry['weather_icon'] == 'na':
                 # If icon mapping failed, try to find the original code that caused it.
                 # Priority:
                 # 1. day_data.weather_id (often the provider's raw numeric/enum code)
@@ -173,9 +185,9 @@ class WeatherData:
                 
                 # If not found via weather_id, check weather_icon 
                 # (this would be the OWM-style icon string, e.g., "01d" or "na")
-                if found_original_code is None:
+                if found_original_code is None: # Check the attribute itself if it was 'na' or None
                     code_val_icon = getattr(day_data, 'weather_icon', None)
-                    # We accept 'na' here as a reportable "code" if weather_id wasn't available/useful
+                    # We accept 'na' or None here as a reportable "code" if weather_id wasn't available/useful
                     if code_val_icon is not None and str(code_val_icon).strip() != '': 
                         found_original_code = str(code_val_icon)
 

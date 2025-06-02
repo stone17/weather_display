@@ -60,14 +60,13 @@ async def test_provider_image_generation(provider_id, base_config, project_root_
     # --- 2. Prepare/Parse Weather Data ---
     print(f"Preparing/parsing data for {provider_id}...")
     temp_unit = current_provider_config.get("temperature_unit", "C")
-    icon_pref = current_provider_config.get("icon_provider", "openweathermap").lower()
+    # icon_pref is not used by WeatherData constructor anymore.
+    # It's used by image_generator, which gets it from current_provider_config.
     graph_config_for_parser = current_provider_config.get('graph_24h_forecast_config', {})
 
     try:
         weather_data_obj = WeatherData(
-            raw_current, raw_hourly, raw_daily,
-            temp_unit,
-            icon_pref,
+            raw_current, raw_hourly, raw_daily, temp_unit,
             graph_config=graph_config_for_parser
         )
 
