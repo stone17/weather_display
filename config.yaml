@@ -1,8 +1,8 @@
 latitude: 51.5074  # London Latitude
 longitude: -0.1278 # London Longitude
 server_ip: "192.168.1.18" # Enclosed in quotes if it might be misinterpreted
-weather_provider: "openweathermap" # Options: see provider_list in this file
-icon_provider_display: "openweathermap" # For current weather & daily forecast icons. Options: see icon_provider_list
+weather_provider: "smhi" # Options: see provider_list in this file
+icon_provider_display: "openweathermap" #" # For current weather & daily forecast icons. Options: see icon_provider_list
 icon_provider_graph: "meteomatics"   # For icons on the 24h graph. Options: see icon_provider_list
 temperature_unit: "C"  # Options: "C" (Celsius) or "F" (Fahrenheit)
 
@@ -17,6 +17,11 @@ supplemental_providers:
   - provider_name: "open-meteo"
     parameters:
       - "uvi"
+  - provider_name: "AQICN"
+    parameters: 
+      - "aqi" # For current AQI
+      - "aqi_pm25_avg" # For daily PM2.5 average forecast
+#     - "dominant_pollutant" # For current dominant pollutant
 #  - provider_name: "another-provider" # Example of another supplemental provider
 #    parameters: ["param1", "param2"]
 
@@ -45,6 +50,21 @@ google_api_key: "YOUR_GOOGLE_API_KEY_HERE"
 openweathermap_api_key: "YOUR_OPENWEATHERMAP_API_KEY_HERE"
 meteomatics_username: "YOUR_METEOMATICS_USERNAME_HERE"
 meteomatics_password: "YOUR_METEOMATICS_PASSWORD_HERE"
+aqicn_api_token: "YOUR_AQICN_TOKEN_HERE"
+
+# Configuration for what details to show in the "Current Weather" panel. There is room for 4 details.
+current_weather_display_details:
+  - "feels_like" # Options: "feels_like", "humidity", "wind_speed", "aqi"
+  - "humidity"
+  - "wind_speed"
+  - "aqi"
+
+# Configuration for what details to show for each day in the "Daily Forecast". There is room for 4 details per day.
+daily_forecast_display_details:
+  - "temp"      # Shows Max/Min temperature. Options: "temp", "rain", "wind", "uvi", "aqi_pm25"
+  - "rain"
+  - "wind"      # Shows wind speed
+  - "uvi"
 
 # Cache settings
 cache_duration_minutes: 10 # Duration in minutes for how long to cache weather data
@@ -220,10 +240,10 @@ icon_configs:
   daily_display: # For the 5-day forecast strip
     google: { width: 60, height: 60, x_offset: 0, y_offset: 20 }
     openweathermap: { width: 100, height: 100, x_offset: -12, y_offset: 5 }
-    meteomatics: { width: 100, height: 100, x_offset: -12, y_offset: 5 }
+    meteomatics: { width: 85, height: 85, x_offset: -12, y_offset: 5 }
     default: { width: 80, height: 80, x_offset: -10, y_offset: 10 } # Fallback
   current_display: # For the main current weather icon
-    google: { width: 90, height: 90, x_offset: 0, y_offset: 45 }
+    google: { width: 80, height: 80, x_offset: 0, y_offset: 35 }
     openweathermap: { width: 100, height: 100, x_offset: -15, y_offset: 35 }
     meteomatics: { width: 100, height: 100, x_offset: -15, y_offset: 35 }
     default: { width: 90, height: 90, x_offset: -10, y_offset: 40 } # Fallback

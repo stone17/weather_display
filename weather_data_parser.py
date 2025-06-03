@@ -49,6 +49,8 @@ class WeatherData:
         current_parsed['humidity'] = self.current_raw.get('humidity')
         current_parsed['wind_speed'] = self.current_raw.get('wind_speed')
         # Format strings later in _format_temperature_strings()
+        current_parsed['aqi'] = self.current_raw.get('aqi')
+        current_parsed['dominant_pollutant'] = self.current_raw.get('dominant_pollutant')
 
         weather_info_list = self.current_raw.get('weather', [])
         weather_info = weather_info_list[0] if weather_info_list else {}
@@ -78,6 +80,15 @@ class WeatherData:
         # If wind speed units can also change, this would need more logic.
         self.current['wind_speed_display'] = f"{wind_speed_val:.1f} m/s" if wind_speed_val is not None else "? m/s"
 
+        aqi_val = self.current.get('aqi')
+        dom_pol = self.current.get('dominant_pollutant')
+        if aqi_val is not None:
+            aqi_str = f" {aqi_val}"
+            if dom_pol:
+                aqi_str += f" ({dom_pol.upper()})"
+            self.current['aqi_display'] = aqi_str
+        else:
+            self.current['aqi_display'] = " ?"
 
     def _format_temp(self, temp_value, unit_str, decimals=1):
         """Formats a temperature value with the specified unit and decimals."""
@@ -208,6 +219,7 @@ class WeatherData:
             entry['rain'] = day_data.rain
             entry['wind_speed'] = day_data.wind_speed
             entry['uvi'] = day_data.uvi
+            entry['aqi_pm25_avg'] = getattr(day_data, 'aqi_pm25_avg', None) # Add this line
             # Other non-numerical fields from DailyDataPoint can be added if needed for display
             entry['summary'] = day_data.summary
             entry['pop'] = day_data.pop # Probability of precipitation

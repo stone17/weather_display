@@ -104,6 +104,7 @@ class DailyDataPoint:
     rain: Optional[float] = None # Total rain volume for the day
     snow: Optional[float] = None # Total snow volume for the day
     uvi: Optional[float] = None
+    aqi_pm25_avg: Optional[int] = None # Average PM2.5 AQI forecast for the day
 
 # --- Base Class ---
 class WeatherProvider(ABC):
@@ -306,6 +307,7 @@ def get_weather_provider(config, project_root_path_from_caller): # Added project
     from providers.provider_openmeteo import OpenMeteoProvider
     from providers.provider_google import GoogleWeatherProvider
     from providers.provider_smhi import SMHIProvider
+    from providers.provider_aqicn import AQICNProvider # Added AQICN
 
     provider_config_name = config.get("weather_provider", "openweathermap").lower() # This is the ID for cache
     lat = config.get("latitude")
@@ -342,6 +344,9 @@ def get_weather_provider(config, project_root_path_from_caller): # Added project
             return GoogleWeatherProvider(api_key, **common_provider_args)
         elif p_config_name_arg == "smhi":
             return SMHIProvider(**common_provider_args) # No API key needed for SMHI
+        elif p_config_name_arg == "aqicn":
+            api_key = config.get("aqicn_api_token") # Ensure this key is in your config.yaml/local
+            return AQICNProvider(api_key, **common_provider_args)
         else:
             print(f"Error: Unknown provider name '{p_config_name_arg}' encountered.")
             return None

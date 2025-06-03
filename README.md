@@ -1,21 +1,23 @@
 # ESP32 Weather Display with Waveshare 5.65-inch e-Paper
 
-This project displays weather information on a Waveshare 5.65-inch e-Paper display connected to an ESP32. It fetches weather data from various providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather), generates an image with the forecast, and uploads it to the ESP32 for display.
+This project displays weather information on a Waveshare 5.65-inch e-Paper display connected to an ESP32. It fetches weather data from various providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, AQICN), generates an image with the forecast, and uploads it to the ESP32 for display.
 
 ## Features
 
 * Displays current weather conditions (temperature, icon, description).
+* Displays current Air Quality Index (AQI) if configured.
 * Shows a detailed hourly forecast graph (temperature, wind, rain).
-* Provides a multi-day forecast summary (icons, high/low temperatures, rain, wind, UV).
-* Supports multiple weather data providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI) via configuration.
-* **Mix and Match Data:** Optionally supplement data from the primary provider with specific parameters (like UV index) from other configured providers.
-* Selectable icon source (OWM or Google) independent of the data provider.
+* Provides a multi-day forecast summary (icons, high/low temperatures, rain, wind, UV, daily AQI).
+* Supports multiple weather data providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, AQICN) via configuration.
+* **Mix and Match Data:** Optionally supplement data from the primary provider with specific parameters (like UV index, AQI) from other configured providers.
+* Selectable icon sources (OpenWeatherMap, Google, Meteomatics) for different parts of the display (current/daily vs. graph).
 * Caches weather data to reduce API calls.
 * Provider-specific caching: Cache is invalidated if the weather provider is changed.
 * Configurable cache lifetime.
 * Customizable graph appearance through configuration file.
 * Asynchronous data fetching for improved performance.
 * Optimized for 7-color e-Paper displays.
+* Configurable display details for current weather and daily forecast sections.
 
 <div align="center">
   <img src="images/weather.png" alt="Weather Display" />
@@ -45,8 +47,8 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 
 ## Resources
 
-* [Waveshare E-Ink display](https://www.waveshare.com/wiki/E-Paper_ESP32_Driver_Board)
-* [Waveshare FW for ESP32](https://files.waveshare.com/upload/5/50/E-Paper_ESP32_Driver_Board_Code.7z)
+* Waveshare E-Ink display
+* Waveshare FW for ESP32
 
 ## Setup
 
@@ -60,6 +62,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
         *   **Meteomatics:** Username and Password.
         *   **SMHI:** No key required (uses `pysmhi` library).
         *   **Google Weather:** Google Cloud Platform API Key with Weather API enabled (Note: This is a paid service).
+        *   **AQICN:** API Token for Air Quality Index data.
     *   **Create `config.yaml`:** Create a file named `config.yaml` in the same directory as the Python scripts. Use the example below and fill in your details:
 
         ```yaml
@@ -67,27 +70,53 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
         longitude: YOUR_LONGITUDE
         server_ip: "YOUR_ESP32_IP_ADDRESS" # Leave empty ("") if not uploading
         weather_provider: "smhi" # "openweathermap", "open-meteo", "meteomatics", "google", or "smhi"
-        icon_provider: "openweathermap" # "openweathermap" or "google"
+        icon_provider_display: "openweathermap" # For current/daily icons. Options: "openweathermap", "google", "meteomatics"
+        icon_provider_graph: "meteomatics"      # For graph icons. Options: "openweathermap", "google", "meteomatics"
+        temperature_unit: "C" # "C" or "F"
+        
         provider_list:
           - "open-meteo"
           - "openweathermap"
           - "meteomatics"
           - "google"
           - "smhi"
+          - "aqicn"
+        icon_provider_list:
+          - "openweathermap"
+          - "google"
+          - "meteomatics"
+
         cache_duration_minutes: 10 # Optional, defaults to 60
         
+        # Configuration for what details to show in the "Current Weather" panel
+        current_weather_display_details:
+          - "feels_like" # Options: "feels_like", "humidity", "wind_speed", "aqi"
+          - "humidity"
+          - "wind_speed"
+          - "aqi"
+        
+        # Configuration for what details to show for each day in the "Daily Forecast"
+        daily_forecast_display_details:
+          - "temp"      # Shows Max/Min temperature. Options: "temp", "rain", "wind", "uvi", "aqi_pm25"
+          - "rain"
+          - "wind"      # Shows wind speed
+          - "uvi"
+          - "aqi_pm25"  # Shows PM2.5 average for the day
+
         # API Keys - only fill for providers you use
-        # Keys for unused providers can be omitted entirely in YAML
         google_api_key: "YOUR_GOOGLE_CLOUD_API_KEY"
         openweathermap_api_key: "YOUR_OPENWEATHERMAP_API_KEY"
         meteomatics_username: "YOUR_METEOMATICS_USERNAME"
         meteomatics_password: "YOUR_METEOMATICS_PASSWORD"
+        aqicn_api_token: "YOUR_AQICN_TOKEN_HERE"
         ```
     *   **Configuration Details:**
         *   `latitude`, `longitude`: Your location.
         *   `server_ip`: The IP address of your ESP32 running the web server firmware. Leave empty (`""`) if not uploading.
         *   `weather_provider`: Choose the source for weather data: `"openweathermap"`, `"open-meteo"`, `"meteomatics"`, or `"google"`.
-        *   `icon_provider`: Choose the source for icons: `"openweathermap"` (uses OWM-style icons, recommended for e-ink contrast) or `"google"` (uses Google icons if available in the data).
+        *   `icon_provider_display`: Choose the icon source for current weather and daily forecast sections (e.g., "openweathermap", "google", "meteomatics").
+        *   `icon_provider_graph`: Choose the icon source for the 24-hour graph (e.g., "openweathermap", "google", "meteomatics").
+        *   `temperature_unit`: "C" for Celsius or "F" for Fahrenheit.
         *   Fill in the corresponding API key/credentials for your chosen `weather_provider`. Keys for unused providers can be left blank or as placeholders.
                 *   `cache_duration_minutes`: (Integer, optional) How long the weather data cache is considered fresh, in minutes. Defaults to `60` if not specified.
 
@@ -105,15 +134,17 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
             parameters:
               - "uvi"
               - "rain"
-          - provider_name: "google"
+          - provider_name: "AQICN"
             parameters:
-              - "wind_speed"
+              - "aqi" # For current AQI
+              - "dominant_pollutant" # For current dominant pollutant
+              - "aqi_pm25_avg" # For daily PM2.5 average forecast
         # Ensure you have credentials for these supplemental providers configured above
         # if they require authentication (e.g., google_api_key for "google").
         ```
 
         **Available Parameters for Merging:**
-        Common parameters you can list in the `"parameters"` array include: `"temp"`, `"feels_like"`, `"humidity"`, `"uvi"`, `"wind_speed"`, `"wind_gust"`, `"weather"`, `"rain"`, `"snow"`, `"summary"`.
+        Common parameters you can list in the `"parameters"` array include: `"temp"`, `"feels_like"`, `"humidity"`, `"uvi"`, `"wind_speed"`, `"wind_gust"`, `"weather"`, `"rain"`, `"snow"`, `"summary"`, `"aqi"`, `"dominant_pollutant"`, `"aqi_pm25_avg"`.
         Note that the supplemental provider must actually provide data for the parameters you list. Merging replaces the entire value for that parameter (including nested dictionaries/lists like `temp` for daily or `weather`).
 
 3.  **Install Requirements:**
@@ -208,32 +239,34 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 ## Weather Provider Parameter Support
 
 This table summarizes the weather parameters supported by each provider. Note that availability may vary based on location and specific API plans. This reflects a hypothetical, comprehensive dataset; actual support should be verified by testing and consulting provider documentation.
-
-| Parameter     | open-meteo | openweathermap | meteomatics | google | smhi                                                                                                                                                                                                                                                                                            |
-| --------------- | :--------: | :------------: | :----------: | :----: | :-----------: |
-| `temp`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `feels_like`    |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |
-| `humidity`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `uvi`           |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |
-| `wind_speed`    |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `wind_gust`     |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `wind_deg`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `rain`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `snow`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `weather`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `hourly`        |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `daily`         |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `alerts`        |     ❌      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `precipitation` |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
-| `summary`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |
+| Parameter     | open-meteo | openweathermap | meteomatics | google | smhi | aqicn |
+| --------------- | :--------: | :------------: | :----------: | :----: | :-----------: | :----: |
+| `temp`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `feels_like`    |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |   ❌   |
+| `humidity`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `uvi`           |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |   ❌   |
+| `wind_speed`    |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `wind_gust`     |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `wind_deg`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `rain`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `snow`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `weather`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `hourly`        |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `daily`         |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `alerts`        |     ❌      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `precipitation` |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `summary`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
+| `aqi` (current) |     ❌      |       ❌        |      ❌       |   ❌   |      ❌       |   ✅   |
+| `aqi` (daily)   |     ❌      |       ❌        |      ❌       |   ❌   |      ❌       |   ✅   |
 
 
 ## Customization
 
-*   **Providers:** Select your preferred `weather_provider` and `icon_provider` in `config.yaml`.
+*   **Providers:** Select your preferred `weather_provider`, `icon_provider_display`, and `icon_provider_graph` in `config.yaml`.
 *   **Font:** Change the `font_path` variables in `create_weather_info.py` to use different TrueType fonts.
 *   **Colors:** Modify the color value tuples (RGB) in `create_weather_info.py` to customize the display's appearance.
 *   **Display:** Adjust the image processing and upload code in `upload.py` to support different e-Paper display models or upload methods.
+*   **Displayed Details:** Modify `current_weather_display_details` and `daily_forecast_display_details` in `config.yaml` to choose what information is shown.
 
 ## Troubleshooting
 
@@ -244,7 +277,7 @@ This table summarizes the weather parameters supported by each provider. Note th
     *   Check the script output for specific error messages from the provider (e.g., 401 Unauthorized, 403 Forbidden, 429 Rate Limit).
     *   Consult the documentation for your chosen weather provider regarding API limits and potential costs (especially Google Weather).
     *   Check the status page of the weather provider if errors persist.
-*   **Icon Issues:** Ensure the `icon_provider` setting is correct. If icons are missing, check the script output for warnings about unmapped conditions or download errors. Clear the `icon_cache` directory if you suspect corrupted icons.
+*   **Icon Issues:** Ensure the `icon_provider_display` and `icon_provider_graph` settings are correct. If icons are missing, check the script output for warnings about unmapped conditions or download errors. Clear the `icon_cache` directory if you suspect corrupted icons.
 *   **`AttributeError: 'FreeTypeFont' object has no attribute 'getsize'`:** You are likely using Pillow 10.0.0 or newer. Ensure `create_weather_info.py` uses `font.getlength(text)` instead of `font.getsize(text)[0]` for calculating text width.
 
 ## Contributing

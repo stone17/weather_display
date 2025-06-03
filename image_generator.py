@@ -29,16 +29,19 @@ DEFAULT_ICON_DISPLAY_CONFIGS = {
     "daily_display": {
         "google": {"width": 60, "height": 60, "x_offset": 0, "y_offset": 20},
         "openweathermap": {"width": 100, "height": 100, "x_offset": -12, "y_offset": 5},
+        "meteomatics": {"width": 100, "height": 100, "x_offset": -12, "y_offset": 5},
         "default": {"width": 80, "height": 80, "x_offset": -10, "y_offset": 10}
     },
     "current_display": {
         "google": {"width": 90, "height": 90, "x_offset": 0, "y_offset": 45},
         "openweathermap": {"width": 100, "height": 100, "x_offset": -15, "y_offset": 35},
+        "meteomatics": {"width": 100, "height": 100, "x_offset": -15, "y_offset": 35},
         "default": {"width": 90, "height": 90, "x_offset": -10, "y_offset": 40}
     },
     "graph_icons": {
         "google_scale_factor": 0.8,
         "openweathermap_scale_factor": 1.0,
+        "meteomatics_scale_factor": 1.0,
         "default_scale_factor": 1.0
     }
 }
@@ -578,6 +581,7 @@ def create_24h_forecast_section(
     peak_display_enabled = peak_display_cfg.get('enabled', False)
     standard_legend_initially_enabled = standard_legend_cfg.get('enabled', True)
     use_standard_legend = standard_legend_initially_enabled and not peak_display_enabled
+    handles = [] # Initialize handles for standard legend
 
     if peak_display_enabled:
         location = peak_display_cfg.get('location', 'in_graph')
@@ -627,11 +631,12 @@ def create_24h_forecast_section(
         
         for s_data in all_series_data_for_legend: # s_values is part of s_data
             cfg = s_data['config']
-            if not s_values: continue
-            if not cfg.get('show_peak_in_legend', False) or not s_data['values']:
+            s_values = s_data['values'] # Correctly access s_values
+            if not s_values: continue # Check if s_values is empty
+            if not cfg.get('show_peak_in_legend', False):
                 continue
 
-            peak_val = max(s_data['values'])
+            peak_val = max(s_values)
             # Determine descriptive text for peak value display
             # Precedence: legend_label -> parameter
             label_text = cfg.get('legend_label', cfg.get('parameter'))
@@ -835,6 +840,10 @@ def create_daily_forecast_display(
     daily_icon_display_map = icon_configs_all.get('daily_display', DEFAULT_ICON_DISPLAY_CONFIGS['daily_display'])
     icon_props = daily_icon_display_map.get(icon_provider_preference, daily_icon_display_map['default'])
 
+    # Get daily forecast display details from config
+    default_daily_details_config = ['temp', 'rain', 'wind', 'uvi', 'aqi_pm25']
+    daily_details_to_show = app_config.get('daily_forecast_display_details', default_daily_details_config)
+
     if not weather_data_daily:
         draw_context.text((daily_start_x, daily_start_y + 50), "Daily data unavailable", font=fonts['regular'], fill=(255,0,0))
         return
@@ -880,44 +889,50 @@ def create_daily_forecast_display(
             target_icon_size = (icon_props['width'], icon_props['height']); paste_pos = (daily_x + icon_props['x_offset'], daily_start_y + icon_props['y_offset'])
             draw_context.rectangle((paste_pos[0], paste_pos[1], paste_pos[0] + target_icon_size[0], paste_pos[1] + target_icon_size[1]), outline="grey")
 
-        # Format numerical data for display
-        high_temp_val = day_forecast.get('temp_max')
-        low_temp_val = day_forecast.get('temp_min')
-        high_temp_str = f"{high_temp_val:.0f}" if high_temp_val is not None else "?"
-        low_temp_str = f"{low_temp_val:.0f}" if low_temp_val is not None else "?"
-        temp_text = f"{high_temp_str}{temp_unit_symbol} / {low_temp_str}{temp_unit_symbol}"
+        # Dynamically draw daily details based on config
+        current_detail_y_pos = daily_start_y + 90 # Starting Y position for the first detail
+        detail_line_height = 20
+        detail_text_x = daily_x + 10
 
-        temp_y_pos = daily_start_y + 90
-        temp_text_x = daily_x + 10
-        draw_context.text((temp_text_x, temp_y_pos), temp_text, font=fonts['small'], fill=colors['text'])
+        if 'temp' in daily_details_to_show:
+            high_temp_val = day_forecast.get('temp_max')
+            low_temp_val = day_forecast.get('temp_min')
+            high_temp_str = f"{high_temp_val:.0f}" if high_temp_val is not None else "?"
+            low_temp_str = f"{low_temp_val:.0f}" if low_temp_val is not None else "?"
+            temp_text = f"{high_temp_str}{temp_unit_symbol} / {low_temp_str}{temp_unit_symbol}"
+            draw_context.text((detail_text_x, current_detail_y_pos), temp_text, font=fonts['small'], fill=colors['text'])
+            current_detail_y_pos += detail_line_height
 
-        rain_val = day_forecast.get('rain')
-        rain_text = f"{rain_val:.1f} mm" if rain_val is not None else "? mm"
-        rain_y_pos = temp_y_pos + 20
-        rain_text_x = daily_x + 10
-        draw_context.text((rain_text_x, rain_y_pos), rain_text, font=fonts['small'], fill=colors['blue'])
+        if 'rain' in daily_details_to_show:
+            rain_val = day_forecast.get('rain')
+            rain_text = f"{rain_val:.1f} mm" if rain_val is not None else "? mm"
+            draw_context.text((detail_text_x, current_detail_y_pos), rain_text, font=fonts['small'], fill=colors['blue'])
+            current_detail_y_pos += detail_line_height
 
-        wind_val = day_forecast.get('wind_speed')
-        # Assuming wind speed is always m/s from the data source for daily.
-        # If daily wind speed could also be in other units and need conversion,
-        # this would require more complex unit handling similar to temperature.
-        wind_str = f"{wind_val:.1f} m/s" if wind_val is not None and isinstance(wind_val, (int, float)) else "? m/s"
-        wind_y_pos = rain_y_pos + 20
-        wind_text_x = daily_x + 10
-        draw_context.text((wind_text_x, wind_y_pos), wind_str, font=fonts['small'], fill=colors['green'])
+        if 'wind' in daily_details_to_show:
+            wind_val = day_forecast.get('wind_speed')
+            wind_str = f"{wind_val:.1f} m/s" if wind_val is not None and isinstance(wind_val, (int, float)) else "? m/s"
+            draw_context.text((detail_text_x, current_detail_y_pos), wind_str, font=fonts['small'], fill=colors['green'])
+            current_detail_y_pos += detail_line_height
 
-        uvi_val = day_forecast.get('uvi')
-        uvi_str = ""
-        if uvi_val is not None:
-            if isinstance(uvi_val, (int, float)):
-                uvi_str = f"UV {uvi_val:.1f}"
-            else: # Should not happen if data is clean
-                uvi_str = f"UV {uvi_val}"
-        else:
-            uvi_str = "UV ?"
-        uvi_y_pos = wind_y_pos + 20
-        uvi_text_x = daily_x + 10
-        draw_context.text((uvi_text_x, uvi_y_pos), uvi_str, font=fonts['small'], fill=colors['orange'])
+        if 'uvi' in daily_details_to_show:
+            uvi_val = day_forecast.get('uvi')
+            uvi_str = ""
+            if uvi_val is not None:
+                if isinstance(uvi_val, (int, float)):
+                    uvi_str = f"UV {uvi_val:.1f}"
+                else:
+                    uvi_str = f"UV {uvi_val}"
+            else:
+                uvi_str = "UV ?"
+            draw_context.text((detail_text_x, current_detail_y_pos), uvi_str, font=fonts['small'], fill=colors['orange'])
+            current_detail_y_pos += detail_line_height
+
+        if 'aqi_pm25' in daily_details_to_show:
+            aqi_pm25_avg_val = day_forecast.get('aqi_pm25_avg')
+            aqi_pm25_str = f"PM2.5: {aqi_pm25_avg_val}" if aqi_pm25_avg_val is not None else "PM2.5: ?"
+            draw_context.text((detail_text_x, current_detail_y_pos), aqi_pm25_str, font=fonts['small'], fill=colors.get('grey', (100,100,100)))
+            # current_detail_y_pos += detail_line_height # No increment if it's the last possible item
 
 
 def generate_weather_image(weather_data, output_path: str, app_config: dict, project_root_path: str):
@@ -975,7 +990,8 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
         'text': (50, 50, 50),
         'blue': (0, 0, 200),
         'green': (0, 180, 0),
-        'orange': (255, 140, 0)
+        'orange': (255, 140, 0),
+        'grey': (100, 100, 100) # Added grey for AQI text
     }
     draw_context.rectangle(((0, 0), (image_width, image_height)), fill=colors['bg'])
 
@@ -987,7 +1003,7 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
     draw_context.text((temp_x, temp_y), current_temp_text, font=fonts['temp'], fill=colors['text'])
 
     # Get icon_provider_preference from the main app_config for consistent icon handling
-    main_icon_provider_pref = app_config.get("icon_provider", "openweathermap").lower()
+    # main_icon_provider_pref = app_config.get("icon_provider", "openweathermap").lower() # Not used directly here
 
     owm_icon_code_current = weather_data.current.get('weather_icon') # Expecting OWM icon code
     # Use the new specific config for display icons (current weather, daily forecast)
@@ -1019,16 +1035,30 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
     else: # owm_icon_code_current is None or 'na'
         draw_context.rectangle((paste_pos_current[0], paste_pos_current[1], paste_pos_current[0] + target_icon_size_current[0], paste_pos_current[1] + target_icon_size_current[1]), outline="grey")
 
-    details_y = 155
+    details_y = 135
     details_x = 20
     line_height = 25
-    details = [
-        f"Feel  : {weather_data.current.get('feels_like_display', '?°')}",
-        f"Hum.: {weather_data.current.get('humidity_display', '?%')}",
-        f"Wind: {weather_data.current.get('wind_speed_display', '? m/s')}",
-    ]
+
+    # Dynamically build current weather details based on config
+    default_current_details = ['feels_like', 'humidity', 'wind_speed', 'aqi']
+    details_to_show_config = app_config.get('current_weather_display_details', default_current_details)
+    details = []
+    current_detail_map = {
+        "feels_like": f"Feel  : {weather_data.current.get('feels_like_display', '?°')}",
+        "humidity":   f"Hum.: {weather_data.current.get('humidity_display', '?%')}",
+        "wind_speed": f"Wind: {weather_data.current.get('wind_speed_display', '? m/s')}",
+        "aqi":        f"AQI:  {weather_data.current.get('aqi_display', ' ?')}", # Assuming aqi_display is a string like "AQI: 42"
+    }
+
+    for detail_key in details_to_show_config:
+        if detail_key in current_detail_map:
+            details.append(current_detail_map[detail_key])
+        else:
+            print(f"Warning: Unknown current weather detail key '{detail_key}' in config. Skipping.")
+
     for i, text in enumerate(details):
-        draw_context.text((details_x, details_y + i * line_height), text, font=fonts['regular'], fill=colors['text'])
+        text_color = colors['text']
+        draw_context.text((details_x, details_y + i * line_height), text, font=fonts['regular'], fill=text_color)
 
     # --- Hourly Forecast Graph Section ---
     hourly_forecast_x = current_weather_width
