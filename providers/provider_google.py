@@ -97,8 +97,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
         'weather': [{'id': 0, 'main': description.split()[0], 'description': description, 'icon': owm_icon,
                      'google_icon_uri': cc.get('weatherCondition', {}).get('iconBaseUri')}],
         'rain': {'1h': cc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0)},
-        'pop': cc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0
-    }
+        'pop': cc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0    }
     for hour_fc in hourly_raw.get('forecastHours', []):
         ts_h = parse_iso_time(hour_fc.get('interval', {}).get('startTime'))
         if ts_h == 0: continue
@@ -122,8 +121,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
             wind_gust=round(hour_fc.get('wind', {}).get('gust', {}).get('value', 0.0) / 3.6, 2),
             weather_main=description_h.split()[0] if description_h else "Unknown",
             weather_description=description_h,
-            weather_icon=owm_icon_h,
-            weather_google_icon_uri=hour_fc.get('weatherCondition', {}).get('iconBaseUri'),
+            weather_icon=owm_icon_h,            
             rain_1h=hour_fc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0),
             pop=hour_fc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0
         )
@@ -164,8 +162,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
             wind_gust=round(active_fc.get('wind', {}).get('gust', {}).get('value', 0.0) / 3.6, 2),
             weather_main=description_d.split()[0] if description_d else "Unknown",
             weather_description=description_d,
-            weather_icon=owm_icon_d,
-            weather_google_icon_uri=active_fc.get('weatherCondition', {}).get('iconBaseUri'),
+            weather_icon=owm_icon_d,            
             clouds=active_fc.get('cloudCover', 50),
             pop=active_fc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0,
             rain=precip_total_mm,

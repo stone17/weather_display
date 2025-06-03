@@ -65,7 +65,6 @@ class HourlyDataPoint:
     weather_main: Optional[str] = None # e.g., "Rain", "Clouds"
     weather_description: Optional[str] = None
     weather_icon: Optional[str] = None # OWM icon code
-    weather_google_icon_uri: Optional[str] = None # Specific for Google
     pop: Optional[float] = None # Probability of precipitation (0.0 to 1.0)
     rain_1h: Optional[float] = None # Rain volume for the last 1 hour
     snow_1h: Optional[float] = None # Snow volume for the last 1 hour
@@ -99,7 +98,6 @@ class DailyDataPoint:
     weather_main: Optional[str] = None
     weather_description: Optional[str] = None
     weather_icon: Optional[str] = None
-    weather_google_icon_uri: Optional[str] = None
     clouds: Optional[int] = None
     pop: Optional[float] = None # Probability of precipitation (0.0 to 1.0)
     precipitation: Optional[float] = None # Overall precipitation

@@ -42,8 +42,8 @@ def transform_owm_data(raw_json_data: dict) -> Optional[dict]:
             weather_description=weather_info.get('description'),
             weather_icon=weather_info.get('icon'),
             pop=hour_data.get('pop'),
-            rain_1h=hour_data.get('rain', {}).get('1h'),
-            snow_1h=hour_data.get('snow', {}).get('1h')
+            rain_1h=hour_data.get('rain', {}).get('1h', 0.0), # Default to 0.0 if 'rain' or '1h' is missing
+            snow_1h=hour_data.get('snow', {}).get('1h', 0.0)  # Default to 0.0 if 'snow' or '1h' is missing
         )
         transformed_data['hourly'].append(hourly_point)
 
@@ -82,8 +82,8 @@ def transform_owm_data(raw_json_data: dict) -> Optional[dict]:
             weather_icon=weather_info.get('icon'),
             clouds=day_data.get('clouds'),
             pop=day_data.get('pop'),
-            rain=day_data.get('rain'),
-            snow=day_data.get('snow'),
+            rain=day_data.get('rain', 0.0), # Default to 0.0 if 'rain' is missing
+            snow=day_data.get('snow', 0.0), # Default to 0.0 if 'snow' is missing
             uvi=day_data.get('uvi')
         )
         transformed_data['daily'].append(daily_point)

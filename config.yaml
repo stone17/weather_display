@@ -1,15 +1,16 @@
 latitude: 51.5074  # London Latitude
 longitude: -0.1278 # London Longitude
 server_ip: "192.168.1.18" # Enclosed in quotes if it might be misinterpreted
-weather_provider: "smhi" # Options: see provider_list in this file
+weather_provider: "openweathermap" # Options: see provider_list in this file
 icon_provider_display: "openweathermap" # For current weather & daily forecast icons. Options: see icon_provider_list
-icon_provider_graph: "google"   # For icons on the 24h graph. Options: see icon_provider_list
+icon_provider_graph: "meteomatics"   # For icons on the 24h graph. Options: see icon_provider_list
 temperature_unit: "C"  # Options: "C" (Celsius) or "F" (Fahrenheit)
 
 # List of all available icon providers in the system
 icon_provider_list:
   - "openweathermap"
   - "google"
+  - "meteomatics"
 
 # Optional: List of supplemental weather data providers
 supplemental_providers:
@@ -214,17 +215,21 @@ graph_24h_forecast_config:
     #   y_axis_min: 0
     #   y_axis_max: 5 # Example max snow
 
+# do not change the following section unless you know what you are doing
 icon_configs:
   daily_display: # For the 5-day forecast strip
     google: { width: 60, height: 60, x_offset: 0, y_offset: 20 }
     openweathermap: { width: 100, height: 100, x_offset: -12, y_offset: 5 }
+    meteomatics: { width: 100, height: 100, x_offset: -12, y_offset: 5 }
     default: { width: 80, height: 80, x_offset: -10, y_offset: 10 } # Fallback
   current_display: # For the main current weather icon
     google: { width: 90, height: 90, x_offset: 0, y_offset: 45 }
     openweathermap: { width: 100, height: 100, x_offset: -15, y_offset: 35 }
+    meteomatics: { width: 100, height: 100, x_offset: -15, y_offset: 35 }
     default: { width: 90, height: 90, x_offset: -10, y_offset: 40 } # Fallback
   graph_icons: # For icons on the 24h graph
     # Scale factor applied to the 'icon_size_pixels' from series config
     google_scale_factor: 0.6
-    openweathermap_scale_factor: 1.0 
+    openweathermap_scale_factor: 1.0
+    meteomatics_scale_factor: 1.0 
     default_scale_factor: 1.0 # Fallback
