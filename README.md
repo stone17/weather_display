@@ -63,14 +63,31 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 
 ## Resources
 
-* [Waveshare E-Ink display](https://www.waveshare.com/wiki/E-Paper_ESP32_Driver_Board)
+* [Waveshare E-Ink display](https://www.waveshare.com/wiki/5.65inch_e-Paper_Module_(F)_Manual#Overview)
 * [Waveshare FW for ESP32](https://files.waveshare.com/upload/5/50/E-Paper_ESP32_Driver_Board_Code.7z)
 
 ## Setup
 
 1.  **Configure ESP32:**
-    *   Follow the instructions in the Waveshare e-Paper Wiki to set up the display with your ESP32. You'll need to install the ESP32 Arduino core and the e-Paper driver library.
-    *   Flash the `.ino` file found in the `Loader_esp32wf` directory of the linked Waveshare firmware above. **Important:** Update your WiFi details in the `srvr.h` file before flashing. This creates a web interface on the ESP32 that allows uploading images. Note the IP address assigned to your ESP32.
+      *   You'll need to install the ESP32 Arduino core and the e-Paper driver library. Detailed instructions can be found on the Waveshare e-Paper Wiki.
+      *   Connect the wires as shown in the diagram above.
+      *   Once the above linked firmware is downloaded and unpacked, the `.ino` file can be found in the `Loader_esp32wf` directory  
+      *   You need to edit the `srvr.h` file to update your WiFi credentials:
+                  ```c
+                  const char *ssid = "your ssid";
+                  const char *password = "your password";
+                  ```
+      *   You also need to update the pin configuration in `epd.h` to match your wiring:
+                  ```c
+                  #define PIN_SPI_SCK  13
+                  #define PIN_SPI_DIN  14
+                  #define PIN_SPI_CS   15
+                  #define PIN_SPI_BUSY 25 // Or your BUSY pin
+                  #define PIN_SPI_RST  26 // Or your RST pin
+                  #define PIN_SPI_DC   27 // Or your DC pin
+                  ```
+      *   After these modifications, flash the firmware. This creates a web interface on the ESP32 that allows uploading images. Note the IP address assigned to your ESP32. The assigned IP address is printed in the Arduino IDE serial monitor. Navigate to the address and verify that the server is up and running.
+
 2.  **Configure Python Script:**
     *   **Obtain Credentials:** Get the necessary API keys or credentials for the weather data provider(s) you intend to use:
         *   **OpenWeatherMap:** API Key for One Call API 3.0.
