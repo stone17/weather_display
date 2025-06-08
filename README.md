@@ -33,6 +33,22 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 * Waveshare 5.65-inch e-Paper (F) display
 * Jumper wires
 
+**Pin Connections (ESP32 to Waveshare 5.65-inch e-Paper):**
+
+*   VCC  - 3V3
+*   GND  - GND
+*   DIN  - GPIO14
+*   CLK  - GPIO13
+*   CS   - GPIO15
+*   DC   - GPIO27
+*   RST  - GPIO26
+*   BUSY - GPIO25
+
+<div align="center">
+  <img src="images/circuit_image.jpg" alt="Wire Diagram" />
+</div>
+
+
 ## Software Requirements
 
 * Python 3.7 or higher (due to newer library features like `datetime.fromisoformat`)
@@ -47,8 +63,8 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 
 ## Resources
 
-* Waveshare E-Ink display
-* Waveshare FW for ESP32
+* [Waveshare E-Ink display](https://www.waveshare.com/wiki/E-Paper_ESP32_Driver_Board)
+* [Waveshare FW for ESP32](https://files.waveshare.com/upload/5/50/E-Paper_ESP32_Driver_Board_Code.7z)
 
 ## Setup
 
