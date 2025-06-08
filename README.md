@@ -73,19 +73,19 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
       *   Connect the wires as shown in the diagram above.
       *   Once the above linked firmware is downloaded and unpacked, the `.ino` file can be found in the `Loader_esp32wf` directory  
       *   You need to edit the `srvr.h` file to update your WiFi credentials:
-                  ```c
-                  const char *ssid = "your ssid";
-                  const char *password = "your password";
-                  ```
+          ```c
+          const char *ssid = "your ssid";
+          const char *password = "your password";
+          ```
       *   You also need to update the pin configuration in `epd.h` to match your wiring:
-                  ```c
-                  #define PIN_SPI_SCK  13
-                  #define PIN_SPI_DIN  14
-                  #define PIN_SPI_CS   15
-                  #define PIN_SPI_BUSY 25 // Or your BUSY pin
-                  #define PIN_SPI_RST  26 // Or your RST pin
-                  #define PIN_SPI_DC   27 // Or your DC pin
-                  ```
+          ```c
+          #define PIN_SPI_SCK  13
+          #define PIN_SPI_DIN  14
+          #define PIN_SPI_CS   15
+          #define PIN_SPI_BUSY 25 // Or your BUSY pin
+          #define PIN_SPI_RST  26 // Or your RST pin
+          #define PIN_SPI_DC   27 // Or your DC pin
+          ```
       *   After these modifications, flash the firmware. This creates a web interface on the ESP32 that allows uploading images. Note the IP address assigned to your ESP32. The assigned IP address is printed in the Arduino IDE serial monitor. Navigate to the address and verify that the server is up and running.
 
 2.  **Configure Python Script:**
