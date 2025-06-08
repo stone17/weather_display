@@ -188,7 +188,7 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
     *   By default, the script will look for `config.yaml` in the same directory as `create_weather_info.py`.
     *   You can specify a custom path to your configuration file using the `--config` argument:
         ```bash
-        python c:\Toolz\weather_display\create_weather_info.py --config /path/to/your/custom_config.yaml
+        python /path/to/your/weather_display/create_weather_info.py --config /path/to/your/custom_config.yaml
         ```
 
 5.  **Configuring the 24-Hour Forecast Graph (Optional):**
