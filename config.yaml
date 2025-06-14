@@ -75,7 +75,7 @@ cache_duration_minutes: 10 # Duration in minutes for how long to cache weather d
 # Configuration for the 24-hour forecast graph
 graph_24h_forecast_config:
   # --- General Graph Appearance ---
-  base_font_size: 11 # Base font size for graph text elements (ticks, labels)
+  base_font_size: 12 # Base font size for graph text elements (ticks, labels)
   y_axis_label_font_weight: "bold"    # [bold or normal] For Y-axis titles like "Temperature"
   x_axis_tick_font_weight: "bold"     # For X-axis time labels like "00h"
   y_axis_tick_font_weight: "bold"     # For Y-axis value labels like "10", "20"
@@ -140,7 +140,7 @@ graph_24h_forecast_config:
       axis: "right"       # Assign to "left" or "right" Y-axis.
       color: "#FF6347"   # Tomato red. Example: CSS color name or hex code.
       line_style: "solid" # Options: "solid", "dashed", "dotted", "dashdot", etc.
-      linewidth: 2        # Width of the line
+      linewidth: 3        # Width of the line
       # scale_type: Defines how the parameter's data is treated for Y-axis scaling.
       #   "auto_padded": Y-axis auto-scales based on data min/max, with padding defined by 'data_occupancy_factor'.
       #                  Data range will occupy 'data_occupancy_factor' of the axis.
@@ -149,6 +149,7 @@ graph_24h_forecast_config:
       #                   If neither, auto-scales from data min/max with default padding.
       show_y_axis_ticks: true       # Default: true. Show Y-axis ticks for this series.
       show_y_axis_tick_labels: true # Default: true. Show Y-axis tick labels (numbers) for this series.
+      y_axis_integer_ticks: false # Default: false. If true, Y-axis ticks will be rounded to integers.
       scale_type: "auto_padded"     # Example: Temperature auto-scales with specified padding
       data_occupancy_factor: 0.8  # Data will take up 80% of its Y-axis range, 10% padding top/bottom
       # y_axis_min: 5               # Example if using manual_range

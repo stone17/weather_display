@@ -10,6 +10,7 @@ except ImportError:
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 from matplotlib.path import Path
+from matplotlib.ticker import MaxNLocator # Added for integer ticks
 from matplotlib.transforms import Affine2D
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox # Moved to top-level imports
 from datetime import datetime, timedelta, timezone
@@ -460,15 +461,18 @@ def create_24h_forecast_section(
         # Apply fontweight to y-tick labels individually
         for label in current_ax.get_yticklabels():
             label.set_fontweight(y_axis_tick_fw)
+
         # Handle tick visibility for this series' axis
         show_ticks = cfg.get('show_y_axis_ticks', True)
         show_tick_labels = cfg.get('show_y_axis_tick_labels', True)
+        force_integer_ticks = cfg.get('y_axis_integer_ticks', False)
 
         if show_ticks:
-            # auto_padded should determine its own ticks based on its calculated range.
-            # Matplotlib will auto-generate ticks based on the y_lim_min and y_lim_max.
+            if force_integer_ticks and show_tick_labels: # Apply locator only if labels are shown
+                current_ax.yaxis.set_major_locator(MaxNLocator(integer=True, nbins='auto'))
+            # If not forcing integer ticks, Matplotlib auto-generates based on y_lim.
             if not show_tick_labels:
-                current_ax.set_yticklabels([])
+                current_ax.set_yticklabels([]) # Hide labels if configured
         else: # No ticks means no labels either
             current_ax.set_yticks([])
             current_ax.set_yticklabels([]) # Explicitly clear
@@ -636,21 +640,29 @@ def create_24h_forecast_section(
             if not cfg.get('show_peak_in_legend', False):
                 continue
 
-            peak_val = max(s_values)
+            param_name = cfg.get('parameter')
             # Determine descriptive text for peak value display
             # Precedence: legend_label -> parameter
-            label_text = cfg.get('legend_label', cfg.get('parameter'))
+            label_text = cfg.get('legend_label', param_name)
             unit_text = cfg.get('unit', '')
+            value_to_display = 0
+
+            # If the parameter is 'rain', sum the values for total; otherwise, take max for peak.
+            # Assumes 'rain' parameter in series config corresponds to hourly precipitation amounts.
+            if param_name == 'rain':
+                value_to_display = sum(s_values)
+            else:
+                value_to_display = max(s_values)
             
             # Default format: .1f for float, .0f for int, direct for others
-            if isinstance(peak_val, float):
-                formatted_peak = f"{peak_val:.1f}{unit_text}"
-            elif isinstance(peak_val, int):
-                formatted_peak = f"{peak_val:.0f}{unit_text}"
+            if isinstance(value_to_display, float):
+                formatted_val = f"{value_to_display:.1f}{unit_text}"
+            elif isinstance(value_to_display, int):
+                formatted_val = f"{value_to_display:.0f}{unit_text}"
             else: # Should ideally be numeric, but handle gracefully
-                formatted_peak = f"{peak_val}{unit_text}"
+                formatted_val = f"{value_to_display}{unit_text}"
                 
-            display_text = f"{label_text}: {formatted_peak}"
+            display_text = f"{label_text}: {formatted_val}"
             
             if location == "above_graph":
                 fig.text(anchor_x, current_y_pos, display_text,
