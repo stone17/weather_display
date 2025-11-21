@@ -139,6 +139,7 @@ graph_24h_forecast_config:
       axis_label_side: "left"    # Optional: "left" or "right". Side for axis_label text relative to its spine. Defaults to series.axis.
       axis: "right"       # Assign to "left" or "right" Y-axis.
       color: "#FF6347"   # Tomato red. Example: CSS color name or hex code.
+      color_negative: "#1E90FF" # Dodger blue. Color for negative values.
       line_style: "solid" # Options: "solid", "dashed", "dotted", "dashdot", etc.
       linewidth: 3        # Width of the line
       # scale_type: Defines how the parameter's data is treated for Y-axis scaling.

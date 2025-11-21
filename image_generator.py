@@ -1,6 +1,7 @@
 # image_generator.py
 import os
 import io
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 try:
     from PIL.Image import Resampling
@@ -53,6 +54,39 @@ def _load_image_from_path(image_path):
     """
     # SVG handling code removed as icon_handling.py is expected to provide raster images.
     return Image.open(image_path).convert("RGBA")
+
+def _plot_dual_color_line(ax, times, values, color_pos, color_neg, **kwargs):
+    """
+    Plots a line with different colors for positive and negative values.
+    Intersects the line at y=0.
+    """
+    x_nums = mdates.date2num(times)
+    y_vals = np.array(values)
+
+    line_style = kwargs.get('linestyle', 'solid')
+    linewidth = kwargs.get('linewidth', 1.5)
+    zorder = kwargs.get('zorder', 2.0)
+
+    for i in range(len(x_nums) - 1):
+        x0, x1 = x_nums[i], x_nums[i+1]
+        y0, y1 = y_vals[i], y_vals[i+1]
+
+        if (y0 >= 0 and y1 >= 0) or (y0 < 0 and y1 < 0):
+            # No crossing
+            seg_color = color_pos if y0 >= 0 else color_neg
+            ax.plot([x0, x1], [y0, y1], color=seg_color, linestyle=line_style, linewidth=linewidth, zorder=zorder)
+        else:
+            # Crossing zero
+            t = -y0 / (y1 - y0)
+            x_cross = x0 + t * (x1 - x0)
+
+            # Segment 1
+            color1 = color_pos if y0 >= 0 else color_neg
+            ax.plot([x0, x_cross], [y0, 0], color=color1, linestyle=line_style, linewidth=linewidth, zorder=zorder)
+
+            # Segment 2
+            color2 = color_pos if y1 >= 0 else color_neg
+            ax.plot([x_cross, x1], [0, y1], color=color2, linestyle=line_style, linewidth=linewidth, zorder=zorder)
 
 def _plot_weather_symbols_for_series(
     current_ax, # The Matplotlib axis object for the current series
@@ -315,7 +349,19 @@ def create_24h_forecast_section(
             # zorder will be set based on plot_type
         }
 
-        if cfg.get('plot_type') == 'fill_between':
+        color_negative = cfg.get('color_negative')
+        if color_negative and cfg.get('plot_type') != 'fill_between':
+            # Dual-color line plot logic
+            _plot_dual_color_line(current_ax, s_times, s_values,
+                                  color_pos=cfg.get('color', 'black'),
+                                  color_neg=color_negative,
+                                  linestyle=cfg.get('line_style', 'solid'),
+                                  linewidth=cfg.get('linewidth', 1.5),
+                                  zorder=2.0)
+            # Add a dummy plot for legend if needed
+            current_ax.plot([], [], color=cfg.get('color', 'black'), label=std_legend_item_label, linestyle=cfg.get('line_style', 'solid'), linewidth=cfg.get('linewidth', 1.5))
+
+        elif cfg.get('plot_type') == 'fill_between':
             plot_args['zorder'] = 1.9 # Fills just behind lines
             current_ax.fill_between(s_times, s_values, alpha=cfg.get('alpha', 0.3), **plot_args)
         else:
@@ -441,7 +487,19 @@ def create_24h_forecast_section(
             # zorder will be set based on plot_type
         }
 
-        if cfg.get('plot_type') == 'fill_between':
+        color_negative = cfg.get('color_negative')
+        if color_negative and cfg.get('plot_type') != 'fill_between':
+            # Dual-color line plot logic
+            _plot_dual_color_line(current_ax, s_times, s_values,
+                                  color_pos=cfg.get('color', 'black'),
+                                  color_neg=color_negative,
+                                  linestyle=cfg.get('line_style', 'solid'),
+                                  linewidth=cfg.get('linewidth', 1.5),
+                                  zorder=2.0)
+            # Add a dummy plot for legend if needed
+            current_ax.plot([], [], color=cfg.get('color', 'black'), label=std_legend_item_label, linestyle=cfg.get('line_style', 'solid'), linewidth=cfg.get('linewidth', 1.5))
+
+        elif cfg.get('plot_type') == 'fill_between':
             plot_args['zorder'] = 1.9 # Fills just behind lines
             current_ax.fill_between(s_times, s_values, alpha=cfg.get('alpha', 0.3), **plot_args)
         else:
