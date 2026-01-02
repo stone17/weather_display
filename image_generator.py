@@ -21,6 +21,7 @@ from datetime import datetime, timedelta, timezone
 # For now, it's passed as an object, so direct import might not be strictly necessary
 # from weather_data_parser import WeatherData # If type hinting WeatherData object
 from icon_handling import download_and_cache_icon # Moved to icon_handling.py
+import sun_utils
 
 # Global variable for image, used by create_24h_forecast_section and create_daily_forecast_display
 # This will be initialized within generate_weather_image
@@ -629,6 +630,28 @@ def create_24h_forecast_section(
         ax_primary_left.grid(True, which='major', axis='y', linestyle=':', color='grey', alpha=0.3)
     if graph_plot_config.get('show_y_grid_right', True) and right_axis_used and ax_primary_right:
         ax_primary_right.grid(True, which='major', axis='y', linestyle=':', color='grey', alpha=0.3)
+
+    # --- Day/Night Highlighting ---
+    day_night_cfg = graph_plot_config.get('day_night_highlight', {})
+    if day_night_cfg.get('enabled', True):
+        lat = app_config.get('latitude')
+        lon = app_config.get('longitude')
+        if lat is not None and lon is not None:
+            # Calculate night intervals
+            night_intervals = sun_utils.get_night_intervals(
+                lat, lon, 
+                min_time_overall - timedelta(hours=12), 
+                max_time_overall + timedelta(hours=12),
+                mode=day_night_cfg.get('mode', 'nautical_twilight')
+            )
+            
+            dn_color = day_night_cfg.get('color', 'lightgrey')
+            dn_alpha = day_night_cfg.get('alpha', 0.3)
+            for start, end in night_intervals:
+                # Increased zorder to ensure visibility (was 0.1)
+                ax_primary_left.axvspan(start, end, color=dn_color, alpha=dn_alpha, zorder=0.5, lw=0)
+        else:
+            print("Warning: latitude or longitude not found in configuration. Skipping day/night highlighting.")
 
 
     # --- Legend Handling ---

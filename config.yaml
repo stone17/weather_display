@@ -84,6 +84,17 @@ graph_24h_forecast_config:
   show_y_grid_right: true
   graph_time_range_hours: 48 # Number of hours to display on the forecast graph (e.g., 12, 24, 48)
 
+  # --- Day/Night Highlight Configuration ---
+  day_night_highlight:
+    enabled: true
+    color: "lightgrey"
+    alpha: 0.6
+    # "civil_twilight" highlights from Civil Dusk to Civil Dawn (including nautical/astro twilight and night)
+    # "night" highlights only from Sunrise to Sunset (approx) or actual Night?
+    # Actually, let's stick to the user request: "civil dawn dusk times"
+    # So we highlight everything BETWEEN civil dusk and civil dawn.
+    mode: "civil_twilight" 
+
   # --- X-Axis Configuration ---
   x_axis_hour_interval: 6   # Show ticks every N hours (e.g., 3, 4, 6)
   x_axis_time_format: "%H"  # Time format for X-axis labels (e.g., "%H:%M", "%H")

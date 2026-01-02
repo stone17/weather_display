@@ -4,3 +4,5 @@ matplotlib
 pysmhi
 aiohttp
 PyYAML
+astral
+IPy
