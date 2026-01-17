@@ -97,7 +97,8 @@ def _plot_weather_symbols_for_series(
     series_symbol_config, # The 'weather_symbols' dict from the current series' config
     icon_provider_preference_from_config, # Global icon preference ("google" or "openweathermap")
     project_root_path_for_icons, # Path to project root for icon caching
-    app_config_for_icons # Full app config or relevant icon_configs section
+    app_config_for_icons, # Full app config or relevant icon_configs section
+    icon_cache_path=None # MODIFIED: Added new argument
 ):
     """
     Plots weather symbols on the graph for a specific series.
@@ -140,11 +141,12 @@ def _plot_weather_symbols_for_series(
                 else:
                     chosen_owm_icon_code_for_graph = None                
                 if chosen_owm_icon_code_for_graph:
+                    # MODIFIED: Pass icon_cache_dir
                     icon_file_path = download_and_cache_icon(
                         chosen_owm_icon_code_for_graph, 
                         icon_provider_preference_from_config, # This is the global provider preference
                         project_root_path_for_icons, 
-                        "icon_cache"
+                        icon_cache_dir=icon_cache_path
                     )
                     if icon_file_path:
                         try:
@@ -170,7 +172,8 @@ def create_24h_forecast_section(
     x_pos, y_pos, # Renamed for clarity, position to paste the graph
     width, height, # Dimensions for the graph area
     default_font_path, base_font_size, # Base font settings
-    project_root_path_for_icons, icon_provider_preference_from_config, app_config # Added app_config
+    project_root_path_for_icons, icon_provider_preference_from_config, app_config, # Added app_config
+    icon_cache_path=None # MODIFIED: Added new argument
 ):
     """Creates the 24-hour forecast section (graph) on the image_canvas."""
     global image_canvas # Uses global image_canvas
@@ -409,7 +412,8 @@ def create_24h_forecast_section(
                 series_weather_symbols_cfg,
                 icon_provider_preference_from_config,
                 project_root_path_for_icons,
-                app_config # Pass app_config for icon scaling
+                app_config, # Pass app_config for icon scaling
+                icon_cache_path=icon_cache_path # MODIFIED: Pass new arg
             )
 
     # Process Right Axis Series
@@ -552,7 +556,8 @@ def create_24h_forecast_section(
                 series_weather_symbols_cfg,
                 icon_provider_preference_from_config,
                 project_root_path_for_icons,
-                app_config # Pass app_config for icon scaling
+                app_config, # Pass app_config for icon scaling
+                icon_cache_path=icon_cache_path # MODIFIED: Pass new arg
             )
 
     # Update axis information in processed_series_data after all axes are created
@@ -918,7 +923,8 @@ def create_daily_forecast_display(
     project_root_path: str, 
     icon_provider_preference: str, 
     app_config: dict, # Added app_config to get icon display properties
-    fonts: dict, colors: dict
+    fonts: dict, colors: dict,
+    icon_cache_path=None # MODIFIED: Added new argument
 ):
     """Draws the daily forecast section onto the global image_canvas."""
     global image_canvas, draw_context # Uses global image_canvas and draw_context
@@ -955,7 +961,13 @@ def create_daily_forecast_display(
             print(f"Warning: No suitable daily icon (OWM code) for day {i}. OWM code: '{owm_icon_code}', Original from provider: '{original_code_debug}'.")
 
         if owm_icon_code and owm_icon_code != 'na':
-            icon_path = download_and_cache_icon(owm_icon_code, icon_provider_preference, project_root_path)
+            # MODIFIED: Pass icon_cache_dir
+            icon_path = download_and_cache_icon(
+                owm_icon_code, 
+                icon_provider_preference, 
+                project_root_path,
+                icon_cache_dir=icon_cache_path
+            )
             if icon_path:
                 try:
                     target_icon_size = (icon_props['width'], icon_props['height'])
@@ -1028,7 +1040,7 @@ def create_daily_forecast_display(
             # current_detail_y_pos += detail_line_height # No increment if it's the last possible item
 
 
-def generate_weather_image(weather_data, output_path: str, app_config: dict, project_root_path: str):
+def generate_weather_image(weather_data, output_path: str, app_config: dict, project_root_path: str, icon_cache_path=None): # MODIFIED: Added new argument
     """
     Creates the weather forecast image (600x448).
     weather_data: An instance of WeatherData (from weather_data_parser.py)
@@ -1110,7 +1122,13 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
     paste_pos_current = (temp_x + current_icon_props['x_offset'], temp_y + current_icon_props['y_offset'])
 
     if owm_icon_code_current and owm_icon_code_current != 'na':
-        icon_path = download_and_cache_icon(owm_icon_code_current, display_icon_provider_pref, project_root_path)
+        # MODIFIED: Pass icon_cache_dir
+        icon_path = download_and_cache_icon(
+            owm_icon_code_current, 
+            display_icon_provider_pref, 
+            project_root_path,
+            icon_cache_dir=icon_cache_path
+        )
         if icon_path:
             try:
                 icon_image_obj = _load_image_from_path(icon_path) 
@@ -1168,13 +1186,16 @@ def generate_weather_image(weather_data, output_path: str, app_config: dict, pro
         weather_data.hourly, graph_specific_config,
         hourly_forecast_x, hourly_forecast_y, hourly_forecast_width, hourly_forecast_height,
         font_path, graph_base_font_size, # For graph text
-        project_root_path, graph_icon_provider_pref, app_config) # For icons and their scaling
+        project_root_path, graph_icon_provider_pref, app_config,
+        icon_cache_path=icon_cache_path # MODIFIED: Added new argument
+    ) 
 
     # --- Daily Forecast Section ---
     create_daily_forecast_display(
         weather_data.daily, weather_data.temperature_unit, 
         project_root_path, display_icon_provider_pref, app_config, # Pass display_icon_provider_pref
-        fonts, colors
+        fonts, colors,
+        icon_cache_path=icon_cache_path # MODIFIED: Added new argument
     )
 
     # --- Save Final Image ---

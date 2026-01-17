@@ -41,8 +41,13 @@ async def generate_weather(config_path_arg=None):
     if not config: return False, "Config failed"
 
     # 3. Define Outputs
-    # Image goes to CACHE folder
+    # Image output
     output_image_path = os.path.join(cache_dir, "weather_forecast_graph.png")
+    
+    # NEW: Define Icon Cache Path (inside cache folder)
+    icon_cache_path = os.path.join(cache_dir, "icon_cache")
+    if not os.path.exists(icon_cache_path):
+        os.makedirs(icon_cache_path)
 
     # 4. Fetch Data
     # NOTE: We pass backend_dir as project_root so providers can find 'images' folder for icons
@@ -53,7 +58,8 @@ async def generate_weather(config_path_arg=None):
     # 5. Generate Image
     wdata = prepare_weather_data(cur, hr, day, config.get("temperature_unit", "C"), config.get('graph_24h_forecast_config', {}))
     
-    img = generate_weather_image(wdata, output_image_path, config, backend_dir)
+    # NEW: Pass icon_cache_path explicitly
+    img = generate_weather_image(wdata, output_image_path, config, backend_dir, icon_cache_path=icon_cache_path)
     if img is None: return False, "Image Gen failed"
 
     # 6. Upload (Legacy)

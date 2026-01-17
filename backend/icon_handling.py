@@ -66,7 +66,12 @@ def download_and_cache_icon(owm_icon_code, provider, project_root_path, icon_cac
         # Optionally, return a path to a default placeholder icon here
         return None
 
-    full_icon_cache_dir = os.path.join(project_root_path, icon_cache_dir)
+    # MODIFIED: Handle absolute paths (new cache logic) vs relative paths (legacy logic)
+    if os.path.isabs(icon_cache_dir):
+        full_icon_cache_dir = icon_cache_dir
+    else:
+        full_icon_cache_dir = os.path.join(project_root_path, icon_cache_dir)
+        
     os.makedirs(full_icon_cache_dir, exist_ok=True)
 
     icon_url = None
