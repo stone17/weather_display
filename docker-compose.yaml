@@ -6,10 +6,9 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      # Mount BOTH config files
-      - ./config.yaml:/app/config.yaml
-      - ./config.local.yaml:/app/config.local.yaml
-      # Or just mount the whole folder if preferred:
-      # - .:/app
-      - ./images:/app/images
-      - ./weather_forecast_graph.png:/app/weather_forecast_graph.png
+      # Mount the configuration folder
+      - ./config:/app/config
+      # Mount the cache folder (for generated images)
+      - ./cache:/app/cache
+      # Optional: Mount backend if you want to edit code live
+      # - ./backend:/app/backend

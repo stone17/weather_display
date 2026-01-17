@@ -1,0 +1,10 @@
+# .gitignore
+config.local.yaml
+*.pyc
+*.json
+__pycache__/
+icon_cache/
+cache/
+test_outputs/
+weather_forecast_graph.png
+processed_image.bmp

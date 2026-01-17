@@ -2,26 +2,26 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Copy requirement files
-COPY requirements.txt .
-
-# Install dependencies
-# We install fontconfig and some fonts for Matplotlib/Pillow
+# Install System Deps
 RUN apt-get update && apt-get install -y \
     fonts-liberation \
     fonts-dejavu \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Python Deps
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the entire project
-COPY . /app
+# Copy Project Structure
+COPY app /app/app
+COPY backend /app/backend
 
-# Define Environment Variable for config
-ENV CONFIG_PATH=/app/config.yaml
+# Create placeholders for config and cache (mounted at runtime)
+# We don't COPY them because we want to use the volumes
+RUN mkdir /app/config && mkdir /app/cache
 
 # Expose Web Port
 EXPOSE 8000
 
-# Run the FastAPI app
+# Run
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
