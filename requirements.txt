@@ -6,3 +6,8 @@ aiohttp
 PyYAML
 astral
 IPy
+fastapi
+uvicorn
+jinja2
+python-multipart
+paho-mqtt

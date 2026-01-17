@@ -15,60 +15,94 @@ import yaml
 project_root = os.path.dirname(os.path.abspath(__file__))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
+
 from weather_provider_base import get_weather_provider
 from weather_data_parser import WeatherData
 from image_generator import generate_weather_image
 
-# --- Main Execution ---
-async def main():
-    # Use the globally defined project_root for the default config path
-    base_config_path = os.path.join(project_root, "config.yaml")
-    local_config_path = os.path.join(project_root, "config.local.yaml") # Path for local/private config
+# --- CORE LOGIC WRAPPER (Works for both Standalone & Docker) ---
+async def generate_weather(config_path=None):
+    """
+    Main logic wrapper. 
+    Can be called by the web server OR the standalone script.
+    Returns: (bool success, str message)
+    """
+    # 1. Handle Config Paths
+    if not config_path:
+        config_path = os.path.join(project_root, "config.yaml")
 
-    parser = argparse.ArgumentParser(description="Create and optionally upload a weather display image.")
-    parser.add_argument(
-        "--config",
-        dest="config_path",
-        default=base_config_path, # Default to the base config path
-        help=f"Path to the base configuration YAML file (default: {base_config_path}). A 'config.local.yaml' in the same directory will also be loaded if present."
-    )
-    args = parser.parse_args()
+    # Define local_config_path relative to the config_path
+    # This fixes your NameError by ensuring it's always defined before use
+    base_dir = os.path.dirname(config_path)
+    local_config_path = os.path.join(base_dir, "config.local.yaml")
+
+    # 2. Load Config
+    config = load_configuration(config_path, local_config_path)
+    if not config:
+        return False, "Configuration load failed"
 
     output_image_path = os.path.join(project_root, "weather_forecast_graph.png")
 
-    # --- Load Config ---
-    config = load_configuration(args.config_path, local_config_path)
-    if not config:
-        exit(1) # load_configuration will print errors
-
-    # --- Get Weather Data ---
+    # 3. Fetch Weather Data
     raw_weather_data = await fetch_weather_data(config, project_root)
     if not raw_weather_data:
-        exit(1) # fetch_weather_data will print errors
+        return False, "Weather data fetch failed"
     current_raw, hourly_raw, daily_raw = raw_weather_data
 
-    # --- Prepare Weather Data ---
-    # icon_provider_preference is used by image_generator, not WeatherData constructor
+    # 4. Prepare Weather Data
     graph_cfg_for_parser = config.get('graph_24h_forecast_config', {})
     weather_data_obj = prepare_weather_data(current_raw, hourly_raw, daily_raw,
                                             config.get("temperature_unit", "C"),
                                             graph_cfg_for_parser)
 
-
-    # --- Create Image ---
+    # 5. Create Image
     generated_image = generate_weather_image(
         weather_data_obj,
         output_image_path,
         config, # Pass the full config object
         project_root # Pass project_root for icon caching path
     )
+    
     if generated_image is None:
-        print("Failed to create weather image. Exiting.")
+        return False, "Image generation failed"
+
+    # 6. Process and Upload Image (Legacy Support)
+    # Wrapped in try/except so it doesn't crash if network/upload fails
+    try:
+        process_and_upload_image(generated_image, config)
+    except Exception as e:
+        print(f"Legacy upload failed (non-critical): {e}")
+
+    return True, "Success"
+
+
+# --- Main Execution (Standalone Mode) ---
+async def main():
+    # Use the globally defined project_root for the default config path
+    base_config_path = os.path.join(project_root, "config.yaml")
+
+    parser = argparse.ArgumentParser(description="Create and optionally upload a weather display image.")
+    parser.add_argument(
+        "--config",
+        dest="config_path",
+        default=base_config_path,
+        help=f"Path to the base configuration YAML file (default: {base_config_path})."
+    )
+    args = parser.parse_args()
+
+    print("Starting standalone weather generation...")
+    
+    # Calls the shared wrapper function
+    success, msg = await generate_weather(args.config_path)
+    
+    if success:
+        print(msg)
+    else:
+        print(f"Error: {msg}")
         exit(1)
 
-    # --- Process and Upload Image ---
-    process_and_upload_image(generated_image, config)
 
+# --- Helper Functions ---
 
 def load_configuration(base_config_path_arg, local_config_path_arg):
     """Loads base and local YAML configurations and merges them."""
@@ -79,7 +113,7 @@ def load_configuration(base_config_path_arg, local_config_path_arg):
             base_cfg = yaml.safe_load(config_file)
             if base_cfg:
                 config.update(base_cfg)
-    except (FileNotFoundError, yaml.YAMLError) as e: # Catch yaml.YAMLError
+    except (FileNotFoundError, yaml.YAMLError) as e:
         print(f"Error loading YAML configuration file '{base_config_path_arg}': {e}")
         return None
 
@@ -94,7 +128,6 @@ def load_configuration(base_config_path_arg, local_config_path_arg):
             print(f"Local configuration file not found: {local_config_path_arg}. Proceeding with base config.")
     except (FileNotFoundError, yaml.YAMLError) as e:
         print(f"Error loading local YAML configuration file '{local_config_path_arg}': {e}")
-        # Continue with base config if local fails, but log it.
 
     if not config:
         print("No configuration loaded. Exiting.")
@@ -120,9 +153,6 @@ async def fetch_weather_data(app_config, proj_root):
 
 def prepare_weather_data(current_raw, hourly_raw, daily_raw, temp_unit, graph_cfg=None):
     """Parses raw weather data into a WeatherData object."""
-    # The WeatherData constructor is:
-    # __init__(self, current_raw, hourly_raw, daily_raw, temp_unit_pref, graph_config=None)
-    # icon_pref is no longer passed to WeatherData constructor.
     return WeatherData(current_raw, hourly_raw, daily_raw, temp_unit, graph_config=graph_cfg)
     
 

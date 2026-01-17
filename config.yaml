@@ -1,268 +1,223 @@
-latitude: 51.5074  # London Latitude
-longitude: -0.1278 # London Longitude
-server_ip: "192.168.1.18" # Enclosed in quotes if it might be misinterpreted
-weather_provider: "smhi" # Options: see provider_list in this file
-icon_provider_display: "openweathermap" #" # For current weather & daily forecast icons. Options: see icon_provider_list
-icon_provider_graph: "meteomatics"   # For icons on the 24h graph. Options: see icon_provider_list
-temperature_unit: "C"  # Options: "C" (Celsius) or "F" (Fahrenheit)
-
-# List of all available icon providers in the system
+latitude: 51.5074
+longitude: -0.1278
+server_ip: 192.168.1.18
+weather_provider: smhi
+icon_provider_display: openweathermap
+icon_provider_graph: meteomatics
+temperature_unit: C
 icon_provider_list:
-  - "openweathermap"
-  - "google"
-  - "meteomatics"
-
-# Optional: List of supplemental weather data providers
+- openweathermap
+- google
+- meteomatics
 supplemental_providers:
-  - provider_name: "open-meteo"
-    parameters:
-      - "uvi"
-  - provider_name: "AQICN"
-    parameters: 
-      - "aqi" # For current AQI
-      - "aqi_pm25_avg" # For daily PM2.5 average forecast
-#     - "dominant_pollutant" # For current dominant pollutant
-#  - provider_name: "another-provider" # Example of another supplemental provider
-#    parameters: ["param1", "param2"]
-
-# List of all available weather providers in the system
+- provider_name: open-meteo
+  parameters:
+  - uvi
+- provider_name: AQICN
+  parameters:
+  - aqi
+  - aqi_pm25_avg
 provider_list:
-  - "open-meteo"
-  - "openweathermap"
-  - "meteomatics"
-  - "google"
-  - "smhi"
-
-# List of all parameters the system might try to fetch
+- open-meteo
+- openweathermap
+- meteomatics
+- google
+- smhi
 parameter_list:
-  - "temp"
-  - "feels_like"
-  - "humidity"
-  - "uvi"
-  - "wind_speed"
-  - "wind_deg"
-  - "wind_gust"
-  - "rain"
-  - "snow"
-
-# API Keys and Credentials - REPLACE WITH YOUR ACTUAL VALUES in a local/private config or environment variables
-google_api_key: "YOUR_GOOGLE_API_KEY_HERE"
-openweathermap_api_key: "YOUR_OPENWEATHERMAP_API_KEY_HERE"
-meteomatics_username: "YOUR_METEOMATICS_USERNAME_HERE"
-meteomatics_password: "YOUR_METEOMATICS_PASSWORD_HERE"
-aqicn_api_token: "YOUR_AQICN_TOKEN_HERE"
-
-# Configuration for what details to show in the "Current Weather" panel. There is room for 4 details.
+- temp
+- feels_like
+- humidity
+- uvi
+- wind_speed
+- wind_deg
+- wind_gust
+- rain
+- snow
+google_api_key: YOUR_GOOGLE_API_KEY_HERE
+openweathermap_api_key: YOUR_OPENWEATHERMAP_API_KEY_HERE
+meteomatics_username: YOUR_METEOMATICS_USERNAME_HERE
+meteomatics_password: YOUR_METEOMATICS_PASSWORD_HERE
+aqicn_api_token: YOUR_AQICN_TOKEN_HERE
 current_weather_display_details:
-  - "feels_like" # Options: "feels_like", "humidity", "wind_speed", "aqi"
-  - "humidity"
-  - "wind_speed"
-  - "aqi"
-
-# Configuration for what details to show for each day in the "Daily Forecast". There is room for 4 details per day.
+- feels_like
+- humidity
+- wind_speed
+- aqi
 daily_forecast_display_details:
-  - "temp"      # Shows Max/Min temperature. Options: "temp", "rain", "wind", "uvi", "aqi_pm25"
-  - "rain"
-  - "wind"      # Shows wind speed
-  - "uvi"
-
-# Cache settings
-cache_duration_minutes: 10 # Duration in minutes for how long to cache weather data
-
-# Optional: Show wind direction arrows on the 24h forecast graph
-# show_wind_direction_arrows: true
-#
-# Configuration for the 24-hour forecast graph
+- temp
+- rain
+- wind
+- uvi
+cache_duration_minutes: 10
 graph_24h_forecast_config:
-  # --- General Graph Appearance ---
-  base_font_size: 12 # Base font size for graph text elements (ticks, labels)
-  y_axis_label_font_weight: "bold"    # [bold or normal] For Y-axis titles like "Temperature"
-  x_axis_tick_font_weight: "bold"     # For X-axis time labels like "00h"
-  y_axis_tick_font_weight: "bold"     # For Y-axis value labels like "10", "20"
-
-  show_y_grid_left: false # Show grid lines for the left Y-axis
+  base_font_size: 12
+  y_axis_label_font_weight: bold
+  x_axis_tick_font_weight: bold
+  y_axis_tick_font_weight: bold
+  show_y_grid_left: false
   show_y_grid_right: true
-  graph_time_range_hours: 48 # Number of hours to display on the forecast graph (e.g., 12, 24, 48)
-
-  # --- Day/Night Highlight Configuration ---
+  graph_time_range_hours: 48
   day_night_highlight:
     enabled: true
-    color: "lightgrey"
+    color: lightgrey
     alpha: 0.6
-    # "civil_twilight" highlights from Civil Dusk to Civil Dawn (including nautical/astro twilight and night)
-    # "night" highlights only from Sunrise to Sunset (approx) or actual Night?
-    # Actually, let's stick to the user request: "civil dawn dusk times"
-    # So we highlight everything BETWEEN civil dusk and civil dawn.
-    mode: "civil_twilight" 
-
-  # --- X-Axis Configuration ---
-  x_axis_hour_interval: 6   # Show ticks every N hours (e.g., 3, 4, 6)
-  x_axis_time_format: "%H"  # Time format for X-axis labels (e.g., "%H:%M", "%H")
-  x_axis_tick_rotation: 0   # Rotation angle for X-axis tick labels
-
-  # --- Legend Configuration ---
+    mode: civil_twilight
+  x_axis_hour_interval: 6
+  x_axis_time_format: '%H'
+  x_axis_tick_rotation: 0
   legend:
-    # Standard legend (used if peak_value_display is not enabled or fails)
     standard_legend:
-      enabled: false # Set to false if you only want peak_value_display
-      position: "bottom"  # "bottom", "top", "best", or any valid Matplotlib loc string
-      columns: 3          # Number of columns in the legend
-      fontsize: 9         # Specific font size for legend text
-      font_weight: "bold" # Font weight for legend text (e.g., "bold", "normal")
+      enabled: false
+      position: bottom
+      columns: 3
+      fontsize: 9
+      font_weight: bold
       frame_on: true
       frame_alpha: 0.6
-      frame_face_color: "white"
-      frame_edge_color: "darkgrey"
-
-    # Peak value display (renders text directly on graph, e.g., "Wind: 10.5 m/s")
-    # If enabled, it typically replaces the standard_legend.
+      frame_face_color: white
+      frame_edge_color: darkgrey
     peak_value_display:
       enabled: true
-      location: "in_graph"  # Changed to "in_graph"
-      layering: "in_front"  # Options: "in_front", "behind" (of plot lines)
-      axis_start_anchor_y: 0.97          # Y position for the first line of text (0.0 bottom to 1.0 top)
-      horizontal_alignment: 'right' # 'left', 'right', 'center' for the text block
-      vertical_alignment_per_line: 'top' # 'top', 'center', 'bottom' for each text line relative to its y_pos
+      location: in_graph
+      layering: in_front
+      axis_start_anchor_y: 0.97
+      horizontal_alignment: right
+      vertical_alignment_per_line: top
       font_size: 10
-      font_weight: "bold"
-      axis_line_y_step: 0.085            # Vertical step for the next line, in fraction of axes height (e.g., 0.06 means 6% down)
-      text_bbox:                  # Bounding box style for each text line
+      font_weight: bold
+      axis_line_y_step: 0.085
+      text_bbox:
         enabled: false
-        face_color: "white"
+        face_color: white
         alpha: 0.75
-        edge_color: "none"        # Use "none" or a light color like "lightgrey"
-        boxstyle: "round,pad=0.3" # Matplotlib boxstyle string (e.g., "round,pad=0.3", "square,pad=0.2")
-  
-  # --- Wind Arrow Configuration (on graph) ---
+        edge_color: none
+        boxstyle: round,pad=0.3
   wind_arrows:
     enabled: true
-    parameter_speed: "wind_speed"    # Parameter name in hourly data for wind speed
-    parameter_degrees: "wind_deg"  # Parameter name in hourly data for wind direction
-    color: "darkgreen"               # Color of the arrow
-    edge_color: "black"            # Edge color of the arrow
-    size: 12                         # Size of the arrow marker
-
-  # List of series to display on the graph.
+    parameter_speed: wind_speed
+    parameter_degrees: wind_deg
+    color: darkgreen
+    edge_color: black
+    size: 12
   series:
-    - parameter: "temp"  # Must be one of the values from 'parameter_list'
-      axis_label: "Temp. (C)"  # Text for this series' Y-axis. Empty means no label.
-      legend_label: ""  # Text for legend. Falls back to parameter name if empty.
-      axis_label_side: "left"    # Optional: "left" or "right". Side for axis_label text relative to its spine. Defaults to series.axis.
-      axis: "right"       # Assign to "left" or "right" Y-axis.
-      color: "#FF6347"   # Tomato red. Example: CSS color name or hex code.
-      color_negative: "#1E90FF" # Dodger blue. Color for negative values.
-      line_style: "solid" # Options: "solid", "dashed", "dotted", "dashdot", etc.
-      linewidth: 3        # Width of the line
-      # scale_type: Defines how the parameter's data is treated for Y-axis scaling.
-      #   "auto_padded": Y-axis auto-scales based on data min/max, with padding defined by 'data_occupancy_factor'.
-      #                  Data range will occupy 'data_occupancy_factor' of the axis.
-      #   "manual_range": Y-axis scale is controlled by 'y_axis_min' and/or 'y_axis_max'.
-      #                   If both are set, scale is fixed. If one is set, other end auto-scales with padding.
-      #                   If neither, auto-scales from data min/max with default padding.
-      show_y_axis_ticks: true       # Default: true. Show Y-axis ticks for this series.
-      show_y_axis_tick_labels: true # Default: true. Show Y-axis tick labels (numbers) for this series.
-      y_axis_integer_ticks: false # Default: false. If true, Y-axis ticks will be rounded to integers.
-      scale_type: "auto_padded"     # Example: Temperature auto-scales with specified padding
-      data_occupancy_factor: 0.8  # Data will take up 80% of its Y-axis range, 10% padding top/bottom
-      # y_axis_min: 5               # Example if using manual_range
-      # y_axis_max: 20              # Example if using manual_range
-
-      weather_symbols: # Weather symbols configuration specific to this "temp" series
-        enabled: true
-        prefer_day_owm_icons: false
-        icon_size_pixels: 20
-        vertical_offset_pixels: 10
-        time_interval_hours: 4
-
-    - parameter: "wind_speed"
-      axis_label: ""   # Y-axis label for wind
-      legend_label: "Wind" # Legend label for wind
-      axis: "left"
-      color: "#32CD32"   # Lime green
-      show_peak_in_legend: true
-      unit: "m/s"
-      line_style: "solid"
-      linewidth: 1.5
-      show_y_axis_ticks: false       # Example: Hide ticks for wind
-      show_y_axis_tick_labels: false # Example: Hide tick labels for wind
-      scale_type: "manual_range"
-      y_axis_min: 0                # Wind speed starts at 0
-      y_axis_max: 25               # Max wind speed for this axis
-
-    - parameter: "wind_gust"
-      axis_label: ""   # Y-axis label for wind
-      legend_label: "" # Legend label for wind
-      axis: "left"
-      color: "#32CD32"   # Lime green
-      show_peak_in_legend: false
-      unit: "m/s"
-      line_style: "dashed"
-      linewidth: 0.1
-      show_y_axis_ticks: false       # Example: Hide ticks for wind
-      show_y_axis_tick_labels: false # Example: Hide tick labels for wind
-      scale_type: "manual_range"
-      y_axis_min: 0                # Wind speed starts at 0
-      y_axis_max: 25               # Max wind speed for this axis
-
-    # New entry for filling between wind_speed and wind_gust
-    # This series type does not use 'parameter', 'axis_label', 'legend_label' for its own line.
-    - plot_type: "fill_between_two_series"
-      series1_param_name: "wind_speed"    # Parameter name of the first series
-      series2_param_name: "wind_gust"     # Parameter name of the second series
-      color: "lightgreen"                 # Color of the fill
-      alpha: 0.4                          # Opacity of the fill
-      zorder: 1.8                         # Drawing order (lines are typically 2.0)
-
-    - parameter: "rain"
-      axis_label: ""             # Example: No Y-axis label for rain
-      legend_label: "Rain"   # Legend label for rain
-      axis: "left"
-      color: "#1E90FF"   # Dodger blue
-      show_peak_in_legend: true
-      unit: "mm"
-      plot_type: "fill_between" # Special plot type for area fill
-      alpha: 0.4                # Alpha transparency for fill_between
-      linewidth: 1              # Linewidth for the edge of the fill
-      show_y_axis_ticks: false       # Example: Hide ticks for rain
-      show_y_axis_tick_labels: false # Example: Hide tick labels for rain
-      scale_type: "manual_range"
-      y_axis_min: 0.01                # Rain starts at 0
-      y_axis_max: 2               # Max rain for this axis
-
-    # Example for snow (if data is available from provider)
-    # - parameter: "snow"
-    #   # label: "Snow" # REMOVED
-    #   axis_label: "Snow (mm)"
-    #   legend_label: "Snowfall"
-    #   axis_label_side: "right"
-    #   axis: "right"
-    #   color: "#ADD8E6" # Light blue
-    #   show_peak_in_legend: true
-    #   unit: "mm"
-    #   plot_type: "fill_between"
-    #   alpha: 0.5
-    #   linewidth: 1
-    #   show_y_axis_ticks: true
-    #   show_y_axis_tick_labels: true
-    #   scale_type: "manual_range"
-    #   y_axis_min: 0
-    #   y_axis_max: 5 # Example max snow
-
-# do not change the following section unless you know what you are doing
+  - parameter: temp
+    axis_label: Temp. (C)
+    legend_label: ''
+    axis_label_side: left
+    axis: right
+    color: '#FF6347'
+    color_negative: '#1E90FF'
+    line_style: solid
+    linewidth: 3
+    show_y_axis_ticks: true
+    show_y_axis_tick_labels: true
+    y_axis_integer_ticks: false
+    scale_type: auto_padded
+    data_occupancy_factor: 0.8
+    weather_symbols:
+      enabled: true
+      prefer_day_owm_icons: false
+      icon_size_pixels: 20
+      vertical_offset_pixels: 10
+      time_interval_hours: 4
+  - parameter: wind_speed
+    axis_label: ''
+    legend_label: Wind
+    axis: left
+    color: '#32CD32'
+    show_peak_in_legend: true
+    unit: m/s
+    line_style: solid
+    linewidth: 1.5
+    show_y_axis_ticks: false
+    show_y_axis_tick_labels: false
+    scale_type: manual_range
+    y_axis_min: 0
+    y_axis_max: 25
+  - parameter: wind_gust
+    axis_label: ''
+    legend_label: ''
+    axis: left
+    color: '#32CD32'
+    show_peak_in_legend: false
+    unit: m/s
+    line_style: dashed
+    linewidth: 0.1
+    show_y_axis_ticks: false
+    show_y_axis_tick_labels: false
+    scale_type: manual_range
+    y_axis_min: 0
+    y_axis_max: 25
+  - plot_type: fill_between_two_series
+    series1_param_name: wind_speed
+    series2_param_name: wind_gust
+    color: lightgreen
+    alpha: 0.4
+    zorder: 1.8
+  - parameter: rain
+    axis_label: ''
+    legend_label: Rain
+    axis: left
+    color: '#1E90FF'
+    show_peak_in_legend: true
+    unit: mm
+    plot_type: fill_between
+    alpha: 0.4
+    linewidth: 1
+    show_y_axis_ticks: false
+    show_y_axis_tick_labels: false
+    scale_type: manual_range
+    y_axis_min: 0.01
+    y_axis_max: 2
 icon_configs:
-  daily_display: # For the 5-day forecast strip
-    google: { width: 60, height: 60, x_offset: 0, y_offset: 20 }
-    openweathermap: { width: 100, height: 100, x_offset: -12, y_offset: 5 }
-    meteomatics: { width: 85, height: 85, x_offset: -12, y_offset: 5 }
-    default: { width: 80, height: 80, x_offset: -10, y_offset: 10 } # Fallback
-  current_display: # For the main current weather icon
-    google: { width: 80, height: 80, x_offset: 0, y_offset: 35 }
-    openweathermap: { width: 100, height: 100, x_offset: -15, y_offset: 35 }
-    meteomatics: { width: 100, height: 100, x_offset: -15, y_offset: 35 }
-    default: { width: 90, height: 90, x_offset: -10, y_offset: 40 } # Fallback
-  graph_icons: # For icons on the 24h graph
-    # Scale factor applied to the 'icon_size_pixels' from series config
+  daily_display:
+    google:
+      width: 60
+      height: 60
+      x_offset: 0
+      y_offset: 20
+    openweathermap:
+      width: 100
+      height: 100
+      x_offset: -12
+      y_offset: 5
+    meteomatics:
+      width: 85
+      height: 85
+      x_offset: -12
+      y_offset: 5
+    default:
+      width: 80
+      height: 80
+      x_offset: -10
+      y_offset: 10
+  current_display:
+    google:
+      width: 80
+      height: 80
+      x_offset: 0
+      y_offset: 35
+    openweathermap:
+      width: 100
+      height: 100
+      x_offset: -15
+      y_offset: 35
+    meteomatics:
+      width: 100
+      height: 100
+      x_offset: -15
+      y_offset: 35
+    default:
+      width: 90
+      height: 90
+      x_offset: -10
+      y_offset: 40
+  graph_icons:
     google_scale_factor: 0.6
     openweathermap_scale_factor: 1.0
-    meteomatics_scale_factor: 1.0 
-    default_scale_factor: 1.0 # Fallback
+    meteomatics_scale_factor: 1.0
+    default_scale_factor: 1.0
+mqtt_broker: 192.168.0.100
+mqtt_port: 1883
+mqtt_user: homeassistant
+mqtt_password: '1234'
