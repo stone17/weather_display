@@ -1,120 +1,150 @@
-# backend/create_weather_info.py
-import argparse
-import json
-import traceback
-from IPy import IP
-import asyncio
 import sys
 import os
 import yaml
+import asyncio
+import logging
+from PIL import Image
 
-# --- PATH SETUP ---
-# backend_dir is where this script lives
+# Ensure backend directory is in python path
 backend_dir = os.path.dirname(os.path.abspath(__file__))
 if backend_dir not in sys.path:
     sys.path.insert(0, backend_dir)
 
-# root_dir is one level up (where config/ and cache/ live)
-root_dir = os.path.dirname(backend_dir)
-config_dir = os.path.join(root_dir, "config")
-cache_dir = os.path.join(root_dir, "cache")
-
-# Import logic from backend
-import upload
 from weather_provider_base import get_weather_provider
 from weather_data_parser import WeatherData
-from image_generator import generate_weather_image
+from display_drivers import SevenColorDriver, SpectraE6Driver
+from image_generator import generate_weather_image 
+from dither import DitherProcessor
 
-async def generate_weather(config_path_arg=None):
-    # 1. Path Resolution
-    if not config_path_arg:
-        config_path = os.path.join(config_dir, "config.yaml")
-    else:
-        config_path = config_path_arg
+logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
+logger = logging.getLogger("WeatherBackend")
 
-    # Local config is sibling to config.yaml
-    base_cfg_dir = os.path.dirname(config_path)
-    local_config_path = os.path.join(base_cfg_dir, "config.local.yaml")
-    
-    # 2. Load Config
-    config = load_configuration(config_path, local_config_path)
-    if not config: return False, "Config failed"
-
-    # 3. Define Outputs
-    # Image output
-    output_image_path = os.path.join(cache_dir, "weather_forecast_graph.png")
-    
-    # NEW: Define Icon Cache Path (inside cache folder)
-    icon_cache_path = os.path.join(cache_dir, "icon_cache")
-    if not os.path.exists(icon_cache_path):
-        os.makedirs(icon_cache_path)
-
-    # 4. Fetch Data
-    # NOTE: We pass backend_dir as project_root so providers can find 'images' folder for icons
-    raw_data = await fetch_weather_data(config, backend_dir) 
-    if not raw_data: return False, "Fetch failed"
-    cur, hr, day = raw_data
-
-    # 5. Generate Image
-    wdata = prepare_weather_data(cur, hr, day, config.get("temperature_unit", "C"), config.get('graph_24h_forecast_config', {}))
-    
-    # NEW: Pass icon_cache_path explicitly
-    img = generate_weather_image(wdata, output_image_path, config, backend_dir, icon_cache_path=icon_cache_path)
-    if img is None: return False, "Image Gen failed"
-
-    # 6. Upload (Legacy)
-    try: process_and_upload_image(img, config)
-    except Exception as e: print(f"Upload warning: {e}")
-
-    return True, "Success"
-
-async def main():
-    default_cfg = os.path.join(config_dir, "config.yaml")
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--config", dest="config_path", default=default_cfg)
-    args = parser.parse_args()
-    
-    success, msg = await generate_weather(args.config_path)
-    if success: print(msg)
-    else: 
-        print(f"Error: {msg}")
-        exit(1)
-
-# --- Helpers ---
-def load_configuration(base, local):
+def load_configuration(base_path, local_path):
     cfg = {}
-    try:
-        with open(base, 'r') as f: cfg.update(yaml.safe_load(f) or {})
-    except Exception as e: print(f"Base Config Error: {e}")
-    
-    if os.path.exists(local):
+    if os.path.exists(base_path):
         try:
-            with open(local, 'r') as f: cfg.update(yaml.safe_load(f) or {})
-        except Exception as e: print(f"Local Config Error: {e}")
+            with open(base_path, 'r') as f:
+                base = yaml.safe_load(f)
+                if base: cfg.update(base)
+        except Exception as e:
+            logger.error(f"Error loading base config {base_path}: {e}")
+    if os.path.exists(local_path):
+        try:
+            with open(local_path, 'r') as f:
+                local = yaml.safe_load(f)
+                if local: cfg.update(local)
+        except Exception as e:
+            logger.error(f"Error loading local config {local_path}: {e}")
     return cfg
 
-async def fetch_weather_data(cfg, root):
-    prov = get_weather_provider(cfg, root)
-    if not prov: return None
-    if not await prov.fetch_data() and not prov.get_all_data(): return None
-    return prov.get_current_data(), prov.get_hourly_data(), prov.get_daily_data()
+class WeatherController:
+    def __init__(self, config, root_dir):
+        self.config = config
+        self.root_dir = root_dir
+        self.driver = self._init_driver()
 
-def prepare_weather_data(c, h, d, u, g=None):
-    return WeatherData(c, h, d, u, graph_config=g)
+    def _init_driver(self):
+        hardware = self.config.get("hardware_profile", "generic")
+        dither = self.config.get("dithering_method", "floyd_steinberg")
+        
+        # Resolution defaults
+        if hardware == "spectra_e6":
+            w, h = 800, 480
+        elif hardware == "waveshare_565":
+            w, h = 600, 448
+        else:
+            w = self.config.get("display_width", 600)
+            h = self.config.get("display_height", 448)
 
-def process_and_upload_image(img, cfg):
-    sip = cfg.get("server_ip")
-    if not sip: 
-        print("Skipping upload (No IP).")
-        return
-    try: IP(sip)
-    except: 
-        print("Skipping upload (Invalid IP).")
-        return
+        logger.info(f"Init Driver: {hardware} ({w}x{h}), Dither: {dither}")
+        
+        if hardware == "spectra_e6":
+            return SpectraE6Driver(w, h, dither_method=dither)
+        else:
+            return SevenColorDriver(w, h, dither_method=dither)
 
-    print(f"Uploading to {sip}...")
-    data, w, h = upload.process_image(img)
-    if data: upload.upload_processed_data(data, w, h, sip, upload.DEFAULT_UPLOAD_URL)
+    async def run_update(self):
+        logger.info("Starting weather update cycle...")
+        
+        provider = get_weather_provider(self.config, self.root_dir)
+        if not await provider.fetch_data():
+            if not provider.get_current_data():
+                 logger.error("Fetch failed and no cache available.")
+                 return False, "Data fetch failed"
+            logger.warning("Fetch failed, using cached data.")
+
+        graph_cfg = self.config.get("graph_24h_forecast_config", {})
+        wdata = WeatherData(
+            provider.get_current_data(), 
+            provider.get_hourly_data(), 
+            provider.get_daily_data(), 
+            self.config.get("temperature_unit", "C"),
+            graph_config=graph_cfg
+        )
+        
+        cache_dir = os.path.join(self.root_dir, "cache")
+        icon_cache = os.path.join(cache_dir, "icon_cache")
+        # Define paths
+        img_source_path = os.path.join(cache_dir, "latest_source.png") # RGB Source
+        img_dithered_path = os.path.join(cache_dir, "latest_dithered.png") # Dithered Result
+        
+        os.makedirs(icon_cache, exist_ok=True)
+        
+        try:
+            # Generate the Full Color Image
+            img_rgb = generate_weather_image(
+                wdata, 
+                img_source_path, # Saves RGB here
+                self.config, 
+                self.root_dir, 
+                icon_cache_path=icon_cache
+            )
+            if not img_rgb:
+                 return False, "Image rendering returned None"
+                 
+            # Apply Dithering for the "default" view
+            dither_method = self.config.get("dithering_method", "floyd_steinberg")
+            ditherer = DitherProcessor()
+            img_dithered = ditherer.process(img_rgb, dither_method)
+            img_dithered.save(img_dithered_path)
+
+        except Exception as e:
+            logger.error(f"Render error: {e}")
+            import traceback
+            traceback.print_exc()
+            return False, f"Render error: {e}"
+
+        try:
+            # The driver re-processes the RGB image, but we've essentially pre-calculated 
+            # the preview above. This call prepares the bytes for upload.
+            raw_data, width, height = self.driver.process_image(img_rgb)
+            
+            server_ip = self.config.get("server_ip")
+            if server_ip:
+                import upload
+                logger.info(f"Uploading to {server_ip}...")
+                upload.upload_processed_data(raw_data, width, height, server_ip, upload.DEFAULT_UPLOAD_URL)
+            
+        except Exception as e:
+            logger.error(f"Hardware processing/upload error: {e}")
+            return True, "Image generated (Upload failed)"
+
+        return True, "Weather updated successfully"
+
+async def generate_weather(config_path):
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    base_dir = os.path.dirname(config_path)
+    filename = os.path.basename(config_path)
+    name, ext = os.path.splitext(filename)
+    local_config_path = os.path.join(base_dir, f"{name}.local{ext}")
+    config = load_configuration(config_path, local_config_path)
+    controller = WeatherController(config, root_dir)
+    return await controller.run_update()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    default_cfg = os.path.join(root, "config", "config.yaml")
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    success, msg = loop.run_until_complete(generate_weather(default_cfg))
+    print(f"Result: {success} - {msg}")

@@ -1,3 +1,10 @@
+# Display Dimensions
+display_width: 600
+display_height: 448
+
+# Hardware Profile (generic or spectra_e6)
+hardware: generic
+
 latitude: 51.5074
 longitude: -0.1278
 server_ip: 192.168.1.18
@@ -217,7 +224,7 @@ icon_configs:
     openweathermap_scale_factor: 1.0
     meteomatics_scale_factor: 1.0
     default_scale_factor: 1.0
-mqtt_broker: 192.168.0.100
+mqtt_broker: 192.168.0.111
 mqtt_port: 1883
 mqtt_user: homeassistant
-mqtt_password: '1234'
+mqtt_password: ''
