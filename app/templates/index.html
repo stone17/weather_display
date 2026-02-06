@@ -60,11 +60,19 @@
                                         <option value="generic" {% if config.get('hardware_profile') == 'generic' %}selected{% endif %}>Generic</option>
                                     </select>
                                 </div>
-                                <div class="col-12">
-                                    <label class="form-label">Dithering Method</label>
+                                <div class="col-6">
+                                    <label class="form-label">Dithering</label>
                                     <select class="form-select form-select-sm" name="dithering_method">
-                                        <option value="floyd_steinberg" {% if config.get('dithering_method') == 'floyd_steinberg' %}selected{% endif %}>Floyd-Steinberg</option>
+                                        <option value="floyd_steinberg" {% if config.get('dithering_method') == 'floyd_steinberg' %}selected{% endif %}>Floyd-S.</option>
                                         <option value="none" {% if config.get('dithering_method') == 'none' %}selected{% endif %}>None</option>
+                                    </select>
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label">Output Format</label>
+                                    <select class="form-select form-select-sm" name="output_format">
+                                        <option value="png" {% if config.get('output_format') == 'png' %}selected{% endif %}>PNG</option>
+                                        <option value="bmp8" {% if config.get('output_format') == 'bmp8' %}selected{% endif %}>BMP 8-bit</option>
+                                        <option value="bmp24" {% if config.get('output_format') == 'bmp24' %}selected{% endif %}>BMP 24-bit</option>
                                     </select>
                                 </div>
                             </div>
@@ -80,6 +88,12 @@
                             </div>
                             
                             <div class="mb-2">
+                                <label class="form-label">Auto-Update (Minutes)</label>
+                                <input type="number" class="form-control form-control-sm" name="update_interval_minutes" value="{{ config.get('update_interval_minutes', 0) }}" min="0" placeholder="0 = Off">
+                                <div class="form-text mt-0">0 = Off. Set interval for pull-based screens.</div>
+                            </div>
+
+                            <div class="mb-2">
                                 <label class="form-label">Location</label>
                                 <div class="input-group input-group-sm">
                                     <input type="text" class="form-control" id="inputCityName" name="city_name" placeholder="City Name" value="">
@@ -93,14 +107,6 @@
                                 <div class="col-6">
                                     <input type="text" class="form-control form-control-sm" id="inputLon" name="lon" placeholder="Lon" value="{{ config.get('lon') or config.get('longitude') or '' }}">
                                 </div>
-                            </div>
-                            <div class="col-12">
-                                <label class="form-label">Output Format</label>
-                                <select class="form-select form-select-sm" name="output_format">
-                                    <option value="png" {% if config.get('output_format') == 'png' %}selected{% endif %}>PNG (Web Standard)</option>
-                                    <option value="bmp8" {% if config.get('output_format') == 'bmp8' %}selected{% endif %}>BMP 8-bit (P Palette) - Recommended for ESP</option>
-                                    <option value="bmp24" {% if config.get('output_format') == 'bmp24' %}selected{% endif %}>BMP 24-bit (RGB)</option>
-                                </select>
                             </div>
 
                             <h6 class="text-muted border-bottom pb-1 mb-2 mt-3 small text-uppercase">Connectivity</h6>
@@ -171,8 +177,7 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body p-0">
-                    <div id="citySearchResults" class="list-group list-group-flush">
-                        </div>
+                    <div id="citySearchResults" class="list-group list-group-flush"></div>
                 </div>
             </div>
         </div>
@@ -180,7 +185,6 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Dither Update Logic
         async function updateDither() {
             const method = document.getElementById('liveDitherMethod').value;
             const formData = new FormData();
@@ -196,7 +200,6 @@
             } catch (e) { alert("Network Error"); }
         }
 
-        // City Search Logic
         const modal = new bootstrap.Modal(document.getElementById('citySearchModal'));
         
         async function openCitySearch() {
@@ -211,7 +214,13 @@
             modal.show();
 
             try {
-                const res = await (await fetch('/lookup_city', { method: 'POST', body: formData })).json();
+                const response = await fetch('/lookup_city', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    const text = await response.text();
+                    list.innerHTML = `<div class="p-3 text-center text-danger">Server Error (${response.status}): ${text}</div>`;
+                    return;
+                }
+                const res = await response.json();
                 
                 if(res.success) {
                     if (res.results.length > 0) {
@@ -220,8 +229,6 @@
                             const name = r.name;
                             const country = r.country || '';
                             const region = r.admin1 || '';
-                            const desc = [name, region, country].filter(Boolean).join(', ');
-                            
                             const item = document.createElement('a');
                             item.className = 'list-group-item list-group-item-action cursor-pointer';
                             item.innerHTML = `<div><strong>${name}</strong> <small class="text-muted">(${country})</small></div><div class="small text-muted">${region}</div>`;
@@ -229,14 +236,14 @@
                             list.appendChild(item);
                         });
                     } else {
-                        list.innerHTML = '<div class="p-3 text-center text-muted">No results found for "' + city + '".</div>';
+                        list.innerHTML = `<div class="p-3 text-center text-muted">No results found for "${city}".</div>`;
                     }
                 } else {
-                    // Display the specific error from the backend
-                    list.innerHTML = '<div class="p-3 text-center text-danger">Search failed: ' + res.error + '</div>';
+                    const errMsg = res.error || "Unknown JSON error";
+                    list.innerHTML = `<div class="p-3 text-center text-danger">Search failed: ${errMsg}</div>`;
                 }
             } catch(e) {
-                list.innerHTML = '<div class="p-3 text-center text-danger">Frontend Error: ' + e.message + '</div>';
+                list.innerHTML = `<div class="p-3 text-center text-danger">Frontend Error: ${e.message}</div>`;
             }
         }
 

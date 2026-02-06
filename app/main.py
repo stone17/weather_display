@@ -21,6 +21,7 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(APP_DIR)
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 
+# Add backend to sys.path
 import sys
 if BACKEND_DIR not in sys.path:
     sys.path.append(BACKEND_DIR)
@@ -32,6 +33,7 @@ from dither import DitherProcessor
 CONFIG_FILE = os.getenv("CONFIG_PATH", os.path.join(PROJECT_ROOT, "config", "config.yaml"))
 CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
 IMG_SOURCE_PATH = os.path.join(CACHE_DIR, "latest_source.png")
+IMG_DITHERED_PATH = os.path.join(CACHE_DIR, "latest_dithered.png")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("WeatherDocker")
@@ -84,6 +86,45 @@ class ConfigManager:
             logger.error(f"Save Error: {e}")
 
 cfg = ConfigManager(CONFIG_FILE)
+
+# --- SCHEDULER ---
+class UpdateScheduler:
+    """Manages the periodic background update task."""
+    def __init__(self):
+        self.task = None
+
+    def restart(self):
+        self.stop()
+        interval = 0
+        try:
+            val = cfg.data.get('update_interval_minutes', 0)
+            if val: interval = int(val)
+        except ValueError: 
+            interval = 0
+            
+        if interval > 0:
+            logger.info(f"Scheduler started: Auto-updating every {interval} minutes.")
+            self.task = asyncio.create_task(self._loop(interval))
+        else:
+            logger.info("Scheduler: Auto-update is disabled (0 or invalid).")
+
+    def stop(self):
+        if self.task:
+            self.task.cancel()
+            self.task = None
+
+    async def _loop(self, interval):
+        try:
+            while True:
+                # Wait for the interval duration
+                await asyncio.sleep(interval * 60)
+                logger.info("Scheduler: Triggering scheduled weather update...")
+                # We use the existing async trigger
+                await trigger_weather_update()
+        except asyncio.CancelledError:
+            logger.info("Scheduler: Task stopped.")
+
+scheduler = UpdateScheduler()
 
 # --- MQTT HANDLER ---
 class MqttHandler:
@@ -172,6 +213,8 @@ async def trigger_weather_update():
     logger.info("Starting weather generation...")
     success, msg = await generate_weather(CONFIG_FILE)
     if success: 
+        # Only set flash message if triggered manually (optional refinement), 
+        # but here we set it always so manual refreshers see result.
         flash_message = {"type": "success", "text": "Weather updated successfully."}
     else: 
         flash_message = {"type": "danger", "text": f"Generation Failed: {msg}"}
@@ -181,8 +224,15 @@ async def trigger_weather_update():
 async def lifespan(app: FastAPI):
     global loop
     loop = asyncio.get_running_loop()
+    
+    # Start Services
     mqtt_handler.start()
+    scheduler.restart() # Initialize Scheduler based on loaded config
+    
     yield
+    
+    # Stop Services
+    scheduler.stop()
     mqtt_handler.stop()
 
 app = FastAPI(lifespan=lifespan)
@@ -190,7 +240,6 @@ templates = Jinja2Templates(directory=os.path.join(APP_DIR, "templates"))
 
 # --- HELPER: Get Current Dithered Path ---
 def get_current_dithered_path():
-    # Check BMP first, then PNG
     bmp_path = os.path.join(CACHE_DIR, "latest_dithered.bmp")
     if os.path.exists(bmp_path): return bmp_path
     png_path = os.path.join(CACHE_DIR, "latest_dithered.png")
@@ -223,7 +272,6 @@ async def get_image():
     """Serves the final dithered image (BMP or PNG) for the ESP."""
     path = get_current_dithered_path()
     if path:
-        # No-cache headers are critical for ESP
         return FileResponse(path, headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
             "Pragma": "no-cache",
@@ -239,7 +287,6 @@ async def get_source_image():
 
 @app.get("/image/dithered")
 async def get_dithered_image():
-    """Endpoint specifically for the Web UI preview."""
     path = get_current_dithered_path()
     if path:
         return FileResponse(path, headers={"Cache-Control": "no-cache"})
@@ -260,10 +307,9 @@ async def apply_dither(method: str = Form(...)):
         ditherer = DitherProcessor()
         result = ditherer.process(img, method)
         
-        # Save according to current format setting
         fmt = cfg.data.get("output_format", "png")
         
-        # Cleanup old
+        # Cleanup
         for f in ["latest_dithered.png", "latest_dithered.bmp"]:
             p = os.path.join(CACHE_DIR, f)
             if os.path.exists(p): os.remove(p)
@@ -287,7 +333,8 @@ async def update_settings(
     server_ip: str = Form(""), weather_provider: str = Form(...),
     city_name: str = Form(""), lat: str = Form(""), lon: str = Form(""),
     hardware_profile: str = Form(...), dithering_method: str = Form("floyd_steinberg"),
-    output_format: str = Form("png")
+    output_format: str = Form("png"),
+    update_interval_minutes: int = Form(0) # New Parameter
 ):
     global flash_message
     width, height = 600, 448
@@ -301,6 +348,7 @@ async def update_settings(
         'hardware_profile': hardware_profile,
         'dithering_method': dithering_method,
         'output_format': output_format,
+        'update_interval_minutes': update_interval_minutes, # Saved to config
         'display_width': width, 'display_height': height,
         'lat': float(lat) if lat else None,
         'lon': float(lon) if lon else None,
@@ -317,7 +365,10 @@ async def update_settings(
         else: status_text = "Settings saved (coordinates trusted)."
 
     cfg.save_local(updates)
+    
+    # Restart Services
     mqtt_handler.stop(); mqtt_handler.start()
+    scheduler.restart() # Applies the new interval immediately
     
     flash_message = {"type": "info", "text": status_text}
     return RedirectResponse("/", status_code=303)
