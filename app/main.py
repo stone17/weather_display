@@ -32,7 +32,6 @@ from dither import DitherProcessor
 CONFIG_FILE = os.getenv("CONFIG_PATH", os.path.join(PROJECT_ROOT, "config", "config.yaml"))
 CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
 IMG_SOURCE_PATH = os.path.join(CACHE_DIR, "latest_source.png")
-IMG_DITHERED_PATH = os.path.join(CACHE_DIR, "latest_dithered.png")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("WeatherDocker")
@@ -96,8 +95,7 @@ class MqttHandler:
 
     def start(self):
         broker = cfg.data.get('mqtt_broker')
-        if not broker: 
-            return
+        if not broker: return
         try:
             user = cfg.data.get('mqtt_user')
             pwd = cfg.data.get('mqtt_password')
@@ -147,38 +145,25 @@ mqtt_handler = MqttHandler()
 
 # --- HELPER: GEOCODING ---
 async def search_cities_interactive(city_name):
-    """
-    Returns (results_list, error_message).
-    """
     url = "https://geocoding-api.open-meteo.com/v1/search"
     params = {"name": city_name, "count": 10, "language": "en", "format": "json"}
-    # Identify ourselves to the API to avoid generic blocking
-    headers = {"User-Agent": "WeatherDisplayDocker/1.0 (internal tool)"}
-    
+    headers = {"User-Agent": "WeatherDisplayDocker/1.0"}
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(url, params=params, headers=headers) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    # Open-Meteo returns {'results': [...]} or just {} if nothing found
                     return data.get("results", []), None 
                 else:
-                    text = await resp.text()
-                    return [], f"API Error {resp.status}: {text}"
-        except aiohttp.ClientError as e:
-            logger.error(f"Geocoding network error: {e}")
-            return [], f"Network Error: {str(e)}"
+                    return [], f"API Error {resp.status}"
         except Exception as e:
-            logger.error(f"Geocoding unexpected error: {e}")
             return [], f"Error: {str(e)}"
 
 async def get_lat_lon_from_city(city_name):
-    """Legacy helper: returns the first match only."""
     results, error = await search_cities_interactive(city_name)
     if results:
         res = results[0]
-        full_name = f"{res.get('name')}, {res.get('country')}"
-        return full_name, res["latitude"], res["longitude"]
+        return f"{res.get('name')}, {res.get('country')}", res["latitude"], res["longitude"]
     return None, None, None
 
 # --- BACKGROUND TASK ---
@@ -187,10 +172,8 @@ async def trigger_weather_update():
     logger.info("Starting weather generation...")
     success, msg = await generate_weather(CONFIG_FILE)
     if success: 
-        logger.info("Generation Success")
         flash_message = {"type": "success", "text": "Weather updated successfully."}
     else: 
-        logger.error(f"Generation Failed: {msg}")
         flash_message = {"type": "danger", "text": f"Generation Failed: {msg}"}
 
 # --- LIFECYCLE ---
@@ -205,6 +188,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory=os.path.join(APP_DIR, "templates"))
 
+# --- HELPER: Get Current Dithered Path ---
+def get_current_dithered_path():
+    # Check BMP first, then PNG
+    bmp_path = os.path.join(CACHE_DIR, "latest_dithered.bmp")
+    if os.path.exists(bmp_path): return bmp_path
+    png_path = os.path.join(CACHE_DIR, "latest_dithered.png")
+    if os.path.exists(png_path): return png_path
+    return None
+
 # --- ROUTES ---
 
 @app.get("/", response_class=HTMLResponse)
@@ -212,42 +204,51 @@ async def home(request: Request):
     global flash_message
     cfg.load()
     last_upd = "Never"
-    if os.path.exists(IMG_DITHERED_PATH):
-        last_upd = datetime.fromtimestamp(os.path.getmtime(IMG_DITHERED_PATH)).strftime('%Y-%m-%d %H:%M:%S')
+    
+    dpath = get_current_dithered_path()
+    if dpath:
+        last_upd = datetime.fromtimestamp(os.path.getmtime(dpath)).strftime('%Y-%m-%d %H:%M:%S')
     
     msg = flash_message
     flash_message = None
 
     return templates.TemplateResponse("index.html", {
-        "request": request, 
-        "config": cfg.data, 
+        "request": request, "config": cfg.data, 
         "providers": ["smhi", "owm", "openmeteo", "meteomatics", "google", "aqicn"], 
-        "last_update": last_upd,
-        "mqtt_status": mqtt_handler.connected,
-        "message": msg
+        "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg
     })
+
+@app.get("/image")
+async def get_image():
+    """Serves the final dithered image (BMP or PNG) for the ESP."""
+    path = get_current_dithered_path()
+    if path:
+        # No-cache headers are critical for ESP
+        return FileResponse(path, headers={
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
+            "Expires": "0"
+        })
+    return HTMLResponse("No image generated.", status_code=404)
 
 @app.get("/image/source")
 async def get_source_image():
     if os.path.exists(IMG_SOURCE_PATH):
-        return FileResponse(IMG_SOURCE_PATH, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+        return FileResponse(IMG_SOURCE_PATH, headers={"Cache-Control": "no-cache"})
     return HTMLResponse("No source image", status_code=404)
 
 @app.get("/image/dithered")
 async def get_dithered_image():
-    if os.path.exists(IMG_DITHERED_PATH):
-        return FileResponse(IMG_DITHERED_PATH, headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    """Endpoint specifically for the Web UI preview."""
+    path = get_current_dithered_path()
+    if path:
+        return FileResponse(path, headers={"Cache-Control": "no-cache"})
     return HTMLResponse("No dithered image", status_code=404)
 
 @app.post("/lookup_city")
 async def lookup_city(city_name: str = Form(...)):
-    """Interactive endpoint for the frontend modal."""
     results, error = await search_cities_interactive(city_name)
-    
-    if error:
-        # Return success=False so frontend can show the specific error
-        return JSONResponse({"success": False, "error": error})
-        
+    if error: return JSONResponse({"success": False, "error": error})
     return JSONResponse({"success": True, "results": results})
 
 @app.post("/apply_dither")
@@ -258,7 +259,22 @@ async def apply_dither(method: str = Form(...)):
         img = Image.open(IMG_SOURCE_PATH).convert("RGB")
         ditherer = DitherProcessor()
         result = ditherer.process(img, method)
-        result.save(IMG_DITHERED_PATH)
+        
+        # Save according to current format setting
+        fmt = cfg.data.get("output_format", "png")
+        
+        # Cleanup old
+        for f in ["latest_dithered.png", "latest_dithered.bmp"]:
+            p = os.path.join(CACHE_DIR, f)
+            if os.path.exists(p): os.remove(p)
+
+        if fmt == "bmp8":
+            result.save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
+        elif fmt == "bmp24":
+            result.convert("RGB").save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
+        else:
+            result.save(os.path.join(CACHE_DIR, "latest_dithered.png"))
+
         cfg.save_local({'dithering_method': method})
         return JSONResponse({"success": True})
     except Exception as e:
@@ -270,10 +286,10 @@ async def update_settings(
     mqtt_user: str = Form(""), mqtt_password: str = Form(""),
     server_ip: str = Form(""), weather_provider: str = Form(...),
     city_name: str = Form(""), lat: str = Form(""), lon: str = Form(""),
-    hardware_profile: str = Form(...), dithering_method: str = Form("floyd_steinberg")
+    hardware_profile: str = Form(...), dithering_method: str = Form("floyd_steinberg"),
+    output_format: str = Form("png")
 ):
     global flash_message
-
     width, height = 600, 448
     if hardware_profile == "spectra_e6" or hardware_profile == "waveshare_73":
         width, height = 800, 480
@@ -284,30 +300,24 @@ async def update_settings(
         'server_ip': server_ip, 'weather_provider': weather_provider,
         'hardware_profile': hardware_profile,
         'dithering_method': dithering_method,
-        'display_width': width,
-        'display_height': height,
+        'output_format': output_format,
+        'display_width': width, 'display_height': height,
         'lat': float(lat) if lat else None,
         'lon': float(lon) if lon else None,
     }
 
     status_text = "Settings saved."
-
-    # SMART LOOKUP LOGIC:
     if city_name:
         if not lat or not lon:
             resolved_name, new_lat, new_lon = await get_lat_lon_from_city(city_name)
             if resolved_name:
-                updates['lat'] = new_lat
-                updates['lon'] = new_lon
-                status_text = f"Auto-resolved '{city_name}' to {new_lat}, {new_lon}."
-            else:
-                status_text = f"Could not find city '{city_name}'."
-        else:
-            status_text = "Settings saved (using provided coordinates)."
+                updates['lat'] = new_lat; updates['lon'] = new_lon
+                status_text = f"Auto-resolved '{city_name}'."
+            else: status_text = f"Could not find '{city_name}'."
+        else: status_text = "Settings saved (coordinates trusted)."
 
     cfg.save_local(updates)
-    mqtt_handler.stop()
-    mqtt_handler.start()
+    mqtt_handler.stop(); mqtt_handler.start()
     
     flash_message = {"type": "info", "text": status_text}
     return RedirectResponse("/", status_code=303)

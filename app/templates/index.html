@@ -94,6 +94,14 @@
                                     <input type="text" class="form-control form-control-sm" id="inputLon" name="lon" placeholder="Lon" value="{{ config.get('lon') or config.get('longitude') or '' }}">
                                 </div>
                             </div>
+                            <div class="col-12">
+                                <label class="form-label">Output Format</label>
+                                <select class="form-select form-select-sm" name="output_format">
+                                    <option value="png" {% if config.get('output_format') == 'png' %}selected{% endif %}>PNG (Web Standard)</option>
+                                    <option value="bmp8" {% if config.get('output_format') == 'bmp8' %}selected{% endif %}>BMP 8-bit (P Palette) - Recommended for ESP</option>
+                                    <option value="bmp24" {% if config.get('output_format') == 'bmp24' %}selected{% endif %}>BMP 24-bit (RGB)</option>
+                                </select>
+                            </div>
 
                             <h6 class="text-muted border-bottom pb-1 mb-2 mt-3 small text-uppercase">Connectivity</h6>
                             <div class="mb-2">

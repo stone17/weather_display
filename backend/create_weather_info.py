@@ -52,6 +52,8 @@ class WeatherController:
             w, h = 800, 480
         elif hardware == "waveshare_565":
             w, h = 600, 448
+        elif hardware == "waveshare_73":
+            w, h = 800, 480
         else:
             w = self.config.get("display_width", 600)
             h = self.config.get("display_height", 448)
@@ -84,17 +86,15 @@ class WeatherController:
         
         cache_dir = os.path.join(self.root_dir, "cache")
         icon_cache = os.path.join(cache_dir, "icon_cache")
-        # Define paths
-        img_source_path = os.path.join(cache_dir, "latest_source.png") # RGB Source
-        img_dithered_path = os.path.join(cache_dir, "latest_dithered.png") # Dithered Result
+        img_source_path = os.path.join(cache_dir, "latest_source.png") 
         
         os.makedirs(icon_cache, exist_ok=True)
         
         try:
-            # Generate the Full Color Image
+            # 1. Generate Raw RGB
             img_rgb = generate_weather_image(
                 wdata, 
-                img_source_path, # Saves RGB here
+                img_source_path, 
                 self.config, 
                 self.root_dir, 
                 icon_cache_path=icon_cache
@@ -102,11 +102,36 @@ class WeatherController:
             if not img_rgb:
                  return False, "Image rendering returned None"
                  
-            # Apply Dithering for the "default" view
+            # 2. Dither
             dither_method = self.config.get("dithering_method", "floyd_steinberg")
             ditherer = DitherProcessor()
             img_dithered = ditherer.process(img_rgb, dither_method)
-            img_dithered.save(img_dithered_path)
+
+            # 3. Save Logic (Format Handling)
+            output_format = self.config.get("output_format", "png") # png, bmp8, bmp24
+            
+            # Clean up old files to avoid confusion
+            for f in ["latest_dithered.png", "latest_dithered.bmp"]:
+                p = os.path.join(cache_dir, f)
+                if os.path.exists(p):
+                    try: os.remove(p)
+                    except: pass
+            
+            if output_format == "bmp8":
+                # Save as 8-bit Palette BMP (img_dithered is already mode 'P')
+                save_path = os.path.join(cache_dir, "latest_dithered.bmp")
+                img_dithered.save(save_path)
+                logger.info("Saved 8-bit BMP")
+            elif output_format == "bmp24":
+                # Convert back to RGB for 24-bit BMP
+                save_path = os.path.join(cache_dir, "latest_dithered.bmp")
+                img_dithered.convert("RGB").save(save_path)
+                logger.info("Saved 24-bit BMP")
+            else:
+                # Default PNG
+                save_path = os.path.join(cache_dir, "latest_dithered.png")
+                img_dithered.save(save_path)
+                logger.info("Saved PNG")
 
         except Exception as e:
             logger.error(f"Render error: {e}")
@@ -114,15 +139,14 @@ class WeatherController:
             traceback.print_exc()
             return False, f"Render error: {e}"
 
+        # 4. Optional Push (Legacy)
         try:
-            # The driver re-processes the RGB image, but we've essentially pre-calculated 
-            # the preview above. This call prepares the bytes for upload.
+            # We still process it to bytes for legacy push if needed
             raw_data, width, height = self.driver.process_image(img_rgb)
-            
             server_ip = self.config.get("server_ip")
             if server_ip:
                 import upload
-                logger.info(f"Uploading to {server_ip}...")
+                logger.info(f"Pushing to {server_ip}...")
                 upload.upload_processed_data(raw_data, width, height, server_ip, upload.DEFAULT_UPLOAD_URL)
             
         except Exception as e:
