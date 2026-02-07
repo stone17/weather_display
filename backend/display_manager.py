@@ -40,6 +40,7 @@ class DisplayOrchestrator:
         width = self.driver.width
         height = self.driver.height
         
+        # 1. GENERATE CONTENT (RGB)
         img_rgb = None
         
         if mode == "photo":
@@ -55,23 +56,34 @@ class DisplayOrchestrator:
             img_rgb = await weather_svc.generate_image(width, height, colors)
 
         if not img_rgb:
+            logger.error("Content generation failed (returned None).")
             return False, "Content generation failed"
 
-        # Save Source
+        # 2. SAVE SOURCE (For Web Preview)
         cache_dir = os.path.join(self.root_dir, "cache")
         if not os.path.exists(cache_dir): os.makedirs(cache_dir)
-        img_rgb.save(os.path.join(cache_dir, "latest_source.png"))
+        
+        source_path = os.path.join(cache_dir, "latest_source.png")
+        try:
+            img_rgb.save(source_path)
+            logger.info(f"Saved source image to {source_path}")
+        except Exception as e:
+            logger.error(f"Failed to save source image: {e}")
 
-        # Dithering
+        # 3. DITHERING
         try:
             dither_method = self.config.get("dithering_method", "floyd_steinberg")
             ditherer = DitherProcessor()
             img_dithered = ditherer.process(img_rgb, dither_method)
+            
+            # Save Dithered Result
             self._save_dithered_file(img_dithered, cache_dir)
+            
         except Exception as e:
+            logger.error(f"Dithering failed: {e}")
             return False, f"Dithering failed: {e}"
 
-        # Server Push (Check Enabled Flag)
+        # 4. SERVER PUSH
         if self.config.get("enable_server_push", False):
             self._handle_legacy_push(img_rgb)
 
@@ -79,16 +91,23 @@ class DisplayOrchestrator:
 
     def _save_dithered_file(self, img, cache_dir):
         fmt = self.config.get("output_format", "png")
+        # Cleanup old files
         for f in ["latest_dithered.png", "latest_dithered.bmp"]:
             p = os.path.join(cache_dir, f)
             if os.path.exists(p): os.remove(p)
             
+        save_path = ""
         if fmt == "bmp8":
-            img.save(os.path.join(cache_dir, "latest_dithered.bmp"))
+            save_path = os.path.join(cache_dir, "latest_dithered.bmp")
+            img.save(save_path)
         elif fmt == "bmp24":
-            img.convert("RGB").save(os.path.join(cache_dir, "latest_dithered.bmp"))
+            save_path = os.path.join(cache_dir, "latest_dithered.bmp")
+            img.convert("RGB").save(save_path)
         else:
-            img.save(os.path.join(cache_dir, "latest_dithered.png"))
+            save_path = os.path.join(cache_dir, "latest_dithered.png")
+            img.save(save_path)
+        
+        logger.info(f"Saved dithered image ({fmt}) to {save_path}")
 
     def _handle_legacy_push(self, img_rgb):
         server_ip = self.config.get("server_ip")

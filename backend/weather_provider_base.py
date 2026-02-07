@@ -13,40 +13,24 @@ DEFAULT_CACHE_FILENAME_SUFFIX = "_weather_data_cache.json"
 
 # --- Common Helper Functions ---
 def parse_iso_time(iso_time_str):
-    """Parses ISO time string (UTC assumed if no offset) to Unix timestamp."""
-    if not iso_time_str:
-        return 0
+    if not iso_time_str: return 0
     try:
-        if '+' not in iso_time_str and 'Z' not in iso_time_str:
-            iso_time_str += '+00:00'
-        elif 'Z' in iso_time_str:
-            iso_time_str = iso_time_str.replace('Z', '+00:00')
-
+        if '+' not in iso_time_str and 'Z' not in iso_time_str: iso_time_str += '+00:00'
+        elif 'Z' in iso_time_str: iso_time_str = iso_time_str.replace('Z', '+00:00')
         if '.' in iso_time_str:
-            time_part, tz_part = iso_time_str.split('+')
-            # Truncate fractional seconds to 6 digits to match python isoformat
-            base_time, fractional = time_part.split('.')
-            fractional = fractional[:6]
-            iso_time_str = f"{base_time}.{fractional}+{tz_part}"
-
-        dt_obj = datetime.fromisoformat(iso_time_str)
-        return int(dt_obj.timestamp())
-    except (ValueError, TypeError) as e:
-        print(f"Warning: Could not parse ISO time string '{iso_time_str}': {e}")
-        return 0
+            base_time, fractional = iso_time_str.split('.')[:2]
+            iso_time_str = f"{base_time}.{fractional[:6]}+{iso_time_str.split('+')[-1]}"
+        return int(datetime.fromisoformat(iso_time_str).timestamp())
+    except Exception: return 0
 
 def parse_google_date(date_obj):
-    """Parses Google Date object {year, month, day} to start-of-day UTC Unix timestamp."""
-    if not date_obj or not all(k in date_obj for k in ['year', 'month', 'day']):
-        return 0
+    if not date_obj: return 0
     try:
-        dt_obj = datetime(date_obj['year'], date_obj['month'], date_obj['day'], 0, 0, 0, tzinfo=timezone.utc)
+        dt_obj = datetime(date_obj.get('year'), date_obj.get('month'), date_obj.get('day'), 0, 0, 0, tzinfo=timezone.utc)
         return int(dt_obj.timestamp())
-    except (ValueError, TypeError, KeyError) as e:
-        print(f"Warning: Could not parse Google date object '{date_obj}': {e}")
-        return 0
+    except Exception: return 0
 
-# --- Standardized Data Structures ---
+# --- Data Structures ---
 @dataclass
 class HourlyDataPoint:
     dt: int = 0
@@ -78,16 +62,21 @@ class DailyDataPoint:
     moonset: Optional[int] = None
     moon_phase: Optional[float] = None
     summary: Optional[str] = None
+    
+    # Temp
     temp_day: Optional[float] = None
     temp_min: Optional[float] = None
     temp_max: Optional[float] = None
     temp_night: Optional[float] = None
-    temp_eve: Optional[float] = None
-    temp_morn: Optional[float] = None
+    temp_eve: Optional[float] = None   # Restored for SMHI
+    temp_morn: Optional[float] = None  # Restored for SMHI
+    
+    # Feels Like
     feels_like_day: Optional[float] = None
     feels_like_night: Optional[float] = None
-    feels_like_eve: Optional[float] = None
-    feels_like_morn: Optional[float] = None
+    feels_like_eve: Optional[float] = None  # Restored for SMHI
+    feels_like_morn: Optional[float] = None # Restored for SMHI
+    
     pressure: Optional[float] = None
     humidity: Optional[int] = None
     dew_point: Optional[float] = None
@@ -108,22 +97,15 @@ class DailyDataPoint:
 
 # --- Base Class ---
 class WeatherProvider(ABC):
-    """Abstract base class for weather data providers."""
     def __init__(self, lat, lon, provider_id_for_cache, **kwargs):
         self.lat = lat
         self.lon = lon
-
-        project_root_path = kwargs.get("project_root_path")
-        if not project_root_path:
-            project_root_path = os.getcwd()
-
+        project_root_path = kwargs.get("project_root_path", os.getcwd())
         cache_duration_cfg = kwargs.get("cache_duration_minutes", CACHE_DURATION_MINUTES)
         self.cache_duration = timedelta(minutes=cache_duration_cfg)
-
+        
         cache_filename = f"{provider_id_for_cache.lower().replace(' ', '_').replace('-', '_')}{DEFAULT_CACHE_FILENAME_SUFFIX}"
         self.cache_file = os.path.join(project_root_path, "cache", cache_filename)
-        
-        # Ensure cache directory exists
         os.makedirs(os.path.dirname(self.cache_file), exist_ok=True)
 
         self._data = None
@@ -131,178 +113,87 @@ class WeatherProvider(ABC):
         self.provider_name = "UnknownProvider"
 
     def _is_cache_valid(self):
-        if not os.path.exists(self.cache_file):
-            return False
+        if not os.path.exists(self.cache_file): return False
         try:
-            modified_time = os.path.getmtime(self.cache_file)
-            if datetime.now() - datetime.fromtimestamp(modified_time) < self.cache_duration:
-                return True
-        except OSError as e:
-            print(f"Error checking cache file timestamp: {e}")
-        return False
+            return (datetime.now() - datetime.fromtimestamp(os.path.getmtime(self.cache_file))) < self.cache_duration
+        except OSError: return False
 
     def _load_from_cache(self):
         try:
-            print(f"Attempting to load {self.provider_name} data from cache: {self.cache_file}")
-            with open(self.cache_file, 'r') as f:
-                cached_content = json.load(f)
-            if cached_content.get('cached_provider_name') != self.provider_name:
-                return False
-            
+            with open(self.cache_file, 'r') as f: cached_content = json.load(f)
+            if cached_content.get('cached_provider_name') != self.provider_name: return False
             weather_data = cached_content.get('weather_data')
-            if isinstance(weather_data, dict) and 'current' in weather_data and 'hourly' in weather_data and 'daily' in weather_data:
-                # Reconstruct Data Objects
-                loaded_hourly_dicts = weather_data.get('hourly', [])
-                weather_data['hourly'] = [HourlyDataPoint(**h_dict) for h_dict in loaded_hourly_dicts if isinstance(h_dict, dict)]
-                
-                loaded_daily_dicts = weather_data.get('daily', [])
-                weather_data['daily'] = [DailyDataPoint(**d_dict) for d_dict in loaded_daily_dicts if isinstance(d_dict, dict)]
-
+            if isinstance(weather_data, dict):
+                weather_data['hourly'] = [HourlyDataPoint(**h) for h in weather_data.get('hourly', [])]
+                weather_data['daily'] = [DailyDataPoint(**d) for d in weather_data.get('daily', [])]
                 self._data = weather_data
-                print(f"Using cached weather data for {self.provider_name}.")
+                print(f"Using cached data for {self.provider_name}.")
                 return True
-            else:
-                return False
+            return False
         except Exception as e:
-            print(f"Error loading cache file {self.cache_file}: {e}")
+            print(f"Cache load error {self.provider_name}: {e}")
             return False
 
-    def _save_to_cache(self, data_to_save):
-        if data_to_save:
+    def _save_to_cache(self, data):
+        if not data: return
+        try:
             import copy
-            data_to_serialize = copy.deepcopy(data_to_save)
+            serializable = copy.deepcopy(data)
+            serializable['hourly'] = [asdict(h) if is_dataclass(h) else h for h in serializable.get('hourly', [])]
+            serializable['daily'] = [asdict(d) if is_dataclass(d) else d for d in serializable.get('daily', [])]
+            with open(self.cache_file, 'w') as f:
+                json.dump({'cached_provider_name': self.provider_name, 'weather_data': serializable}, f, indent=4)
+        except Exception as e: print(f"Cache save error: {e}")
 
-            if isinstance(data_to_serialize.get('hourly'), list):
-                data_to_serialize['hourly'] = [asdict(h) if is_dataclass(h) else h for h in data_to_serialize['hourly']]
-            
-            if isinstance(data_to_serialize.get('daily'), list):
-                data_to_serialize['daily'] = [asdict(d) if is_dataclass(d) else d for d in data_to_serialize['daily']]
-            
-            cache_content = {
-                'cached_provider_name': self.provider_name,
-                'weather_data': data_to_serialize
-            }
-            try:
-                with open(self.cache_file, 'w') as f:
-                    json.dump(cache_content, f, indent=4)
-                print(f"Serialized weather data for {self.provider_name} saved to cache.")
-            except Exception as e:
-                print(f"Error saving data to cache: {e}")
-
-    # --- RESTORED ROBUST MERGING LOGIC ---
-    def _merge_supplemental_data(self, supplemental_data_all, parameters_to_merge):
-        if not self._data or not supplemental_data_all:
-            print(f"Skipping merge for {self.provider_name}: primary or supplemental data missing.")
-            return
-            
-        print(f"Merging parameters {parameters_to_merge} from supplemental provider into {self.provider_name} data.")
-        
-        # 1. Merge Current
-        sup_current = supplemental_data_all.get('current')
-        if sup_current and self._data.get('current'):
-            for param in parameters_to_merge:
-                if param in sup_current:
-                    self._data['current'][param] = sup_current[param]
-                    print(f"  Merged 'current.{param}'")
-
-        # 2. Merge Hourly (Match by Timestamp)
-        sup_hourly_list = supplemental_data_all.get('hourly', [])
-        primary_hourly_list = self._data.get('hourly', [])
-
-        if sup_hourly_list and primary_hourly_list:
-            sup_hourly_lookup = {h.dt: h for h in sup_hourly_list if hasattr(h, 'dt')}
-            
-            for primary_hour_dp in primary_hourly_list:
-                if not hasattr(primary_hour_dp, 'dt'): continue 
-
-                dt_match = primary_hour_dp.dt
-                if dt_match in sup_hourly_lookup:
-                    sup_hour_dp = sup_hourly_lookup[dt_match]
-                    for param in parameters_to_merge:
-                        if hasattr(sup_hour_dp, param):
-                            value_to_merge = getattr(sup_hour_dp, param)
-                            setattr(primary_hour_dp, param, value_to_merge)
-
-        # 3. Merge Daily (Match by Date String YYYY-MM-DD)
-        # This is robust against slightly different "midnight" timestamps
-        sup_daily_list = supplemental_data_all.get('daily', [])
-        primary_daily_list = self._data.get('daily', [])
-        
-        if sup_daily_list and primary_daily_list:
-            sup_daily_date_lookup = {}
-            for sup_day_dp in sup_daily_list:
-                if not hasattr(sup_day_dp, 'dt'): continue
-                sup_dt_val = sup_day_dp.dt
-                if sup_dt_val is not None: 
-                    sup_date_str = datetime.fromtimestamp(sup_dt_val, tz=timezone.utc).strftime('%Y-%m-%d')
-                    sup_daily_date_lookup[sup_date_str] = sup_day_dp
-            
-            for primary_day_dp in primary_daily_list:
-                if not hasattr(primary_day_dp, 'dt'): continue
-                primary_dt_val = primary_day_dp.dt
-                primary_date_str = datetime.fromtimestamp(primary_dt_val, tz=timezone.utc).strftime('%Y-%m-%d') if primary_dt_val else None
-                
-                if primary_date_str and primary_date_str in sup_daily_date_lookup:
-                    sup_day_dp_match = sup_daily_date_lookup[primary_date_str]
-                    for param in parameters_to_merge:
-                        if hasattr(sup_day_dp_match, param):
-                            value_to_merge = getattr(sup_day_dp_match, param)
-                            setattr(primary_day_dp, param, value_to_merge)
-        print("Data merging complete.")
+    def _merge_supplemental_data(self, supplemental_data, parameters):
+        if not self._data or not supplemental_data: return
+        print(f"Merging {parameters} from supplemental...")
+        if 'current' in supplemental_data and 'current' in self._data:
+            for p in parameters: 
+                if p in supplemental_data['current']: self._data['current'][p] = supplemental_data['current'][p]
+        sup_h_map = {h.dt: h for h in supplemental_data.get('hourly', [])}
+        for h in self._data.get('hourly', []):
+            if h.dt in sup_h_map:
+                for p in parameters:
+                    if hasattr(sup_h_map[h.dt], p): setattr(h, p, getattr(sup_h_map[h.dt], p))
+        sup_d_map = {datetime.fromtimestamp(d.dt, timezone.utc).strftime('%Y-%m-%d'): d for d in supplemental_data.get('daily', [])}
+        for d in self._data.get('daily', []):
+            d_str = datetime.fromtimestamp(d.dt, timezone.utc).strftime('%Y-%m-%d')
+            if d_str in sup_d_map:
+                for p in parameters:
+                    if hasattr(sup_d_map[d_str], p): setattr(d, p, getattr(sup_d_map[d_str], p))
 
     @abstractmethod
-    async def _fetch_from_api(self):
-        pass
+    async def _fetch_from_api(self): pass
 
     async def fetch_data(self):
-        if self._is_cache_valid() and self._load_from_cache():
-            return True
-        print(f"Fetching new weather data from API for {self.provider_name}...")
-        
+        if self._is_cache_valid() and self._load_from_cache(): return True
+        print(f"Fetching API data for {self.provider_name}...")
         try:
-            fetched_api_data = await self._fetch_from_api()
-            if fetched_api_data:
-                self._data = fetched_api_data
-                for sup_info in self.supplemental_providers_info:
-                    sup_instance = sup_info['instance']
-                    sup_params = sup_info['parameters']
-                    print(f"Fetching supplemental data from {sup_instance.provider_name} for parameters: {sup_params}")
-                    
-                    # Fetch logic for supplemental
-                    if await sup_instance.fetch_data():
-                        supplemental_full_data = sup_instance.get_all_data()
-                        if supplemental_full_data:
-                            self._merge_supplemental_data(supplemental_full_data, sup_params)
-                    else:
-                        print(f"Failed to fetch data from supplemental provider: {sup_instance.provider_name}")
-                
+            data = await self._fetch_from_api()
+            if data:
+                self._data = data
+                for sup in self.supplemental_providers_info:
+                    print(f"Fetching supplemental {sup['instance'].provider_name}...")
+                    if await sup['instance'].fetch_data():
+                        self._merge_supplemental_data(sup['instance'].get_all_data(), sup['parameters'])
                 self._save_to_cache(self._data)
                 return True
             else:
-                print(f"Failed to fetch new data from API for {self.provider_name}.")
-                if os.path.exists(self.cache_file):
-                    print(f"Attempting to use potentially outdated cache as fallback for {self.provider_name}.")
-                    return self._load_from_cache()
-                return False
+                print(f"API fetch failed. Fallback to cache.")
+                return self._load_from_cache()
         except Exception as e:
-            print(f"Fetch Error: {e}")
+            print(f"Fetch loop error: {e}")
             traceback.print_exc()
             return False
 
-    def get_current_data(self):
-        return self._data.get('current') if self._data else None
-    def get_hourly_data(self):
-        return self._data.get('hourly') if self._data else None
-    def get_daily_data(self):
-        return self._data.get('daily') if self._data else None
-    def get_all_data(self):
-        return self._data
+    def get_current_data(self): return self._data.get('current') if self._data else None
+    def get_hourly_data(self): return self._data.get('hourly') if self._data else None
+    def get_daily_data(self): return self._data.get('daily') if self._data else None
+    def get_all_data(self): return self._data
 
-# --- Factory Function ---
+# --- Factory ---
 def get_weather_provider(config, project_root_path_from_caller):
-    """
-    Factory function to create and return the appropriate WeatherProvider instance.
-    """
     from providers.provider_owm import OpenWeatherMapProvider
     from providers.provider_meteomatics import MeteomaticsProvider
     from providers.provider_openmeteo import OpenMeteoProvider
@@ -310,76 +201,46 @@ def get_weather_provider(config, project_root_path_from_caller):
     from providers.provider_smhi import SMHIProvider
     from providers.provider_aqicn import AQICNProvider
 
-    provider_config_name = config.get("weather_provider", "openweathermap").lower()
+    p_name = config.get("weather_provider", "openweathermap").lower()
     
-    # --- FIX: Support 'lat'/'lon' from UI and 'latitude'/'longitude' from yaml ---
-    lat = config.get("lat") if config.get("lat") is not None else config.get("latitude")
-    lon = config.get("lon") if config.get("lon") is not None else config.get("longitude")
-    
-    cache_duration_cfg = config.get("cache_duration_minutes", CACHE_DURATION_MINUTES)
-    supplemental_providers_config = config.get("supplemental_providers", [])
+    # STRICTLY USE latitude / longitude
+    lat = config.get("latitude")
+    lon = config.get("longitude")
+
+    print(f"DEBUG FACTORY: lat: {lat}, lon: {lon}")
 
     if lat is None or lon is None:
-        raise ValueError("Latitude and Longitude must be defined in config.json")
+        raise ValueError("Latitude and Longitude must be defined in config.")
 
-    print(f"Attempting to initialize provider: {provider_config_name} with cache duration: {cache_duration_cfg} minutes")
+    common_args = {
+        "lat": float(lat), "lon": float(lon),
+        "project_root_path": project_root_path_from_caller,
+        "cache_duration_minutes": config.get("cache_duration_minutes", 60),
+        "provider_id_for_cache": p_name
+    }
 
-    def _instantiate_provider(p_config_name_arg, is_supplemental=False):
-        # Common arguments
-        common_provider_args = {
-            "lat": float(lat),
-            "lon": float(lon),
-            "project_root_path": project_root_path_from_caller,
-            "cache_duration_minutes": cache_duration_cfg,
-            "provider_id_for_cache": p_config_name_arg
-        }
-
-        if p_config_name_arg == "meteomatics":
-            return MeteomaticsProvider(config.get("meteomatics_username"), config.get("meteomatics_password"), **common_provider_args)
-        elif p_config_name_arg == "openweathermap":
-            return OpenWeatherMapProvider(config.get("openweathermap_api_key"), **common_provider_args)
-        elif p_config_name_arg == "open-meteo":
-            return OpenMeteoProvider(**common_provider_args)
-        elif p_config_name_arg == "google":
-            return GoogleWeatherProvider(config.get("google_api_key"), **common_provider_args)
-        elif p_config_name_arg == "smhi":
-            return SMHIProvider(**common_provider_args)
-        elif p_config_name_arg == "aqicn":
-            return AQICNProvider(config.get("aqicn_api_token"), **common_provider_args)
-        else:
-            print(f"Error: Unknown provider name '{p_config_name_arg}' encountered.")
-            return None
-
-    primary_provider = None
     try:
-        primary_provider = _instantiate_provider(provider_config_name)
+        if p_name == "meteomatics": provider = MeteomaticsProvider(config.get("meteomatics_username"), config.get("meteomatics_password"), **common_args)
+        elif p_name == "openweathermap": provider = OpenWeatherMapProvider(config.get("openweathermap_api_key"), **common_args)
+        elif p_name == "open-meteo": provider = OpenMeteoProvider(**common_args)
+        elif p_name == "google": provider = GoogleWeatherProvider(config.get("google_api_key"), **common_args)
+        elif p_name == "smhi": provider = SMHIProvider(**common_args)
+        elif p_name == "aqicn": provider = AQICNProvider(config.get("aqicn_api_token"), **common_args)
+        else: return None
+        
+        for sup in config.get("supplemental_providers", []):
+            s_name = sup.get("provider_name", "").lower()
+            if not s_name or s_name == p_name: continue
+            
+            s_common = common_args.copy(); s_common["provider_id_for_cache"] = s_name
+            s_inst = None
+            if s_name == "aqicn": s_inst = AQICNProvider(config.get("aqicn_api_token"), **s_common)
+            elif s_name == "open-meteo": s_inst = OpenMeteoProvider(**s_common)
+            
+            if s_inst: provider.supplemental_providers_info.append({'instance': s_inst, 'parameters': sup.get("parameters", [])})
+            
+        return provider
     except Exception as e:
-        print(f"Error initializing primary provider '{provider_config_name}': {e}")
+        print(f"Provider Init Error: {e}")
         traceback.print_exc()
         return None
-
-    if not primary_provider:
-        print(f"Failed to initialize primary provider '{provider_config_name}'.")
-        return None
-
-    for sup_config in supplemental_providers_config:
-        sup_provider_name = sup_config.get("provider_name")
-        sup_parameters = sup_config.get("parameters", [])
-        if not sup_provider_name or not sup_parameters:
-            continue
-        if sup_provider_name.lower() == primary_provider.provider_name.lower():
-            continue
-            
-        print(f"Initializing supplemental provider: {sup_provider_name} for parameters: {sup_parameters}")
-        try:
-            supplemental_instance = _instantiate_provider(sup_provider_name.lower(), is_supplemental=True)
-            if supplemental_instance:
-                primary_provider.supplemental_providers_info.append({
-                    'instance': supplemental_instance,
-                    'parameters': sup_parameters
-                })
-        except Exception as e:
-            print(f"Error initializing supplemental provider '{sup_provider_name}': {e}")
-            traceback.print_exc()
-
-    return primary_provider

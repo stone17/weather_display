@@ -1,0 +1,19 @@
+<h6 class="small text-uppercase text-muted">Upload Photos</h6>
+
+<div class="mb-3">
+    <div class="input-group input-group-sm">
+        <input type="file" class="form-control" id="photoInput" multiple accept="image/*">
+        <button class="btn btn-outline-secondary" type="button" onclick="uploadPhotos()">Upload</button>
+    </div>
+</div>
+
+<div class="list-group list-group-flush border rounded" style="max-height: 200px; overflow-y: auto;">
+    {% for photo in photos %}
+    <div class="list-group-item d-flex justify-content-between align-items-center py-1 photo-list-item">
+        <span class="text-truncate" style="max-width: 200px;">{{ photo }}</span>
+        <button type="button" class="btn btn-link text-danger p-0 text-decoration-none" onclick="deletePhoto('{{ photo }}')">×</button>
+    </div>
+    {% else %}
+    <div class="list-group-item text-muted text-center py-2 small">No photos uploaded</div>
+    {% endfor %}
+</div>

@@ -1,299 +1,228 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Display Manager</title>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <style>
-        .pixelated { image-rendering: pixelated; image-rendering: crisp-edges; }
-        .preview-container { background-color: #212529; border-radius: 4px; padding: 15px; }
-        .preview-label { color: #ccc; font-size: 0.85rem; margin-bottom: 5px; font-weight: 500; }
-        .weather-img { max-width: 100%; height: auto; border: 1px solid #444; border-radius: 3px; background-color: white; }
-        .form-label { font-size: 0.85rem; margin-bottom: 0.2rem; font-weight: 500; }
-        .card-header { font-weight: 600; background-color: #fff; }
-        .cursor-pointer { cursor: pointer; }
-        .photo-list-item { font-size: 0.9rem; }
-    </style>
-</head>
-<body class="bg-light">
+{% extends "layout.html" %}
+
+{% block content %}
+
+<div class="row align-items-start">
     
-    <nav class="navbar navbar-light bg-white border-bottom shadow-sm mb-4">
-        <div class="container-fluid px-4">
-            <span class="navbar-brand mb-0 h1">🖥️&nbsp; Display Manager</span>
-            <form action="/trigger_now" method="post" class="d-flex">
-                <button type="submit" class="btn btn-primary btn-sm fw-bold">🔄 Force Update</button>
-            </form>
-        </div>
-    </nav>
-
-    <div class="container-fluid px-4">
+    <div class="col-lg-4 col-xl-4 mb-4">
+        <form action="/update_settings" method="post" id="settingsForm">
+            <div class="card shadow-sm">
+                <div class="card-header">
+                    <ul class="nav nav-tabs card-header-tabs" id="configTabs" role="tablist">
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-general" type="button">General</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-weather" type="button">Weather</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-photos" type="button">Photos</button></li>
+                    </ul>
+                </div>
+                <div class="card-body">
+                    <div class="tab-content">
+                        <div class="tab-pane fade" id="tab-general">{% include 'partials/tab_general.html' %}</div>
+                        <div class="tab-pane fade" id="tab-weather">{% include 'partials/tab_weather.html' %}</div>
+                        <div class="tab-pane fade" id="tab-photos">{% include 'partials/tab_photos.html' %}</div>
+                    </div>
+                </div>
+            </div>
+        </form>
         
-        {% if message %}
-        <div class="alert alert-{{ message.type }} alert-dismissible fade show py-2 mb-3">
-            {{ message.text }}
-            <button type="button" class="btn-close pb-2" data-bs-dismiss="alert"></button>
-        </div>
-        {% endif %}
-
-        <div class="row align-items-start"> <div class="col-lg-4 col-xl-4 mb-4">
-                <div class="card shadow-sm"> <div class="card-header">
-                        <ul class="nav nav-tabs card-header-tabs" id="configTabs" role="tablist">
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-general" type="button">General</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-weather" type="button">Weather</button></li>
-                            <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-photos" type="button">Photos</button></li>
-                        </ul>
-                    </div>
-                    <div class="card-body">
-                        <form action="/update_settings" method="post" id="settingsForm">
-                            <div class="tab-content">
-                                
-                                <div class="tab-pane fade" id="tab-general">
-                                    <h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase">Display Mode</h6>
-                                    <div class="mb-3">
-                                        <select class="form-select" name="display_mode">
-                                            <option value="weather" {% if config.get('display_mode') == 'weather' %}selected{% endif %}>Weather Station</option>
-                                            <option value="photo" {% if config.get('display_mode') == 'photo' %}selected{% endif %}>Photo Frame</option>
-                                        </select>
-                                    </div>
-
-                                    <h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase">Hardware</h6>
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-12">
-                                            <label class="form-label">Profile</label>
-                                            <select class="form-select form-select-sm" name="hardware_profile">
-                                                <option value="spectra_e6" {% if config.get('hardware_profile') == 'spectra_e6' %}selected{% endif %}>reTerminal Spectra E6</option>
-                                                <option value="waveshare_565" {% if config.get('hardware_profile') == 'waveshare_565' %}selected{% endif %}>Waveshare 5.65"</option>
-                                                <option value="waveshare_73" {% if config.get('hardware_profile') == 'waveshare_73' %}selected{% endif %}>Waveshare 7.3"</option>
-                                                <option value="generic" {% if config.get('hardware_profile') == 'generic' %}selected{% endif %}>Generic</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="form-label">Dithering</label>
-                                            <select class="form-select form-select-sm" name="dithering_method">
-                                                <option value="floyd_steinberg" {% if config.get('dithering_method') == 'floyd_steinberg' %}selected{% endif %}>Floyd-S.</option>
-                                                <option value="none" {% if config.get('dithering_method') == 'none' %}selected{% endif %}>None</option>
-                                            </select>
-                                        </div>
-                                        <div class="col-6">
-                                            <label class="form-label">Output</label>
-                                            <select class="form-select form-select-sm" name="output_format">
-                                                <option value="png" {% if config.get('output_format') == 'png' %}selected{% endif %}>PNG</option>
-                                                <option value="bmp8" {% if config.get('output_format') == 'bmp8' %}selected{% endif %}>BMP 8-bit</option>
-                                                <option value="bmp24" {% if config.get('output_format') == 'bmp24' %}selected{% endif %}>BMP 24-bit</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <div class="mb-3">
-                                        <label class="form-label">Auto-Update (Min)</label>
-                                        <input type="number" class="form-control form-control-sm" name="update_interval_minutes" value="{{ config.get('update_interval_minutes', 0) }}" min="0" placeholder="0 = Off">
-                                    </div>
-
-                                    <h6 class="text-muted border-bottom pb-1 mb-2 mt-3 small text-uppercase">Connectivity</h6>
-                                    
-                                    <div class="form-check form-switch mb-2">
-                                        <input class="form-check-input" type="checkbox" name="enable_server_push" value="true" id="chkServer" {% if config.get('enable_server_push') %}checked{% endif %}>
-                                        <label class="form-check-label small" for="chkServer">Enable ESP Push</label>
-                                    </div>
-                                    <div class="mb-3 ps-4 border-start">
-                                        <input type="text" class="form-control form-control-sm" name="server_ip" value="{{ config.get('server_ip', '') }}" placeholder="IP Address">
-                                    </div>
-
-                                    <div class="form-check form-switch mb-2">
-                                        <input class="form-check-input" type="checkbox" name="enable_mqtt" value="true" id="chkMqtt" {% if config.get('enable_mqtt') %}checked{% endif %}>
-                                        <label class="form-check-label small" for="chkMqtt">Enable MQTT</label>
-                                    </div>
-                                    <div class="ps-4 border-start">
-                                        <div class="input-group input-group-sm mb-2">
-                                            <input type="text" class="form-control" name="mqtt_broker" placeholder="Broker IP" value="{{ config.get('mqtt_broker', '') }}">
-                                            <span class="input-group-text">:</span>
-                                            <input type="number" class="form-control" name="mqtt_port" placeholder="1883" value="{{ config.get('mqtt_port', 1883) }}" style="max-width: 80px;">
-                                        </div>
-                                        <div class="row g-2">
-                                            <div class="col-6"><input type="text" class="form-control form-control-sm" name="mqtt_user" placeholder="User" value="{{ config.get('mqtt_user', '') }}"></div>
-                                            <div class="col-6"><input type="password" class="form-control form-control-sm" name="mqtt_password" placeholder="Pass" value="{{ config.get('mqtt_password', '') }}"></div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <div class="tab-pane fade" id="tab-weather">
-                                    <div class="mb-3">
-                                        <label class="form-label">Provider</label>
-                                        <select class="form-select form-select-sm" name="weather_provider">
-                                            {% for p in providers %}
-                                            <option value="{{ p }}" {% if config.get('weather_provider') == p %}selected{% endif %}>{{ p|upper }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="mb-2">
-                                        <label class="form-label">Location</label>
-                                        <div class="input-group input-group-sm">
-                                            <input type="text" class="form-control" id="inputCityName" name="city_name" placeholder="City Name">
-                                            <button class="btn btn-outline-primary" type="button" onclick="openCitySearch()">Search</button>
-                                        </div>
-                                    </div>
-                                    <div class="row g-2 mb-2">
-                                        <div class="col-6"><input type="text" class="form-control form-control-sm" id="inputLat" name="lat" placeholder="Lat" value="{{ config.get('lat') or config.get('latitude') or '' }}"></div>
-                                        <div class="col-6"><input type="text" class="form-control form-control-sm" id="inputLon" name="lon" placeholder="Lon" value="{{ config.get('lon') or config.get('longitude') or '' }}"></div>
-                                    </div>
-                                </div>
-
-                                <div class="tab-pane fade" id="tab-photos">
-                                    <div class="mb-3">
-                                        <label class="form-label">Display Order</label>
-                                        <select class="form-select form-select-sm" name="photo_sort_order">
-                                            <option value="random" {% if config.get('photo_sort_order') == 'random' %}selected{% endif %}>Random</option>
-                                            <option value="alphabetical" {% if config.get('photo_sort_order') == 'alphabetical' %}selected{% endif %}>Sequential (A-Z)</option>
-                                        </select>
-                                        <div class="form-text">Cycles through photos on every auto-update interval.</div>
-                                    </div>
-                                    <hr>
-                                    <h6 class="small text-uppercase text-muted">Upload Photos</h6>
-                                    </div>
-
-                            </div>
-                            
-                            <div class="mt-3">
-                                <button type="submit" class="btn btn-success w-100 fw-bold">Save Settings</button>
-                            </div>
-                        </form>
-
-                        <div id="photoManagerContainer" class="d-none mt-4 pt-3 border-top">
-                            <form action="/upload_photos" method="post" enctype="multipart/form-data" class="mb-3">
-                                <div class="input-group input-group-sm">
-                                    <input type="file" class="form-control" name="files" multiple accept="image/*">
-                                    <button class="btn btn-outline-secondary" type="submit">Upload</button>
-                                </div>
-                            </form>
-                            
-                            <div class="list-group list-group-flush border rounded" style="max-height: 200px; overflow-y: auto;">
-                                {% for photo in photos %}
-                                <div class="list-group-item d-flex justify-content-between align-items-center py-1 photo-list-item">
-                                    <span class="text-truncate" style="max-width: 200px;">{{ photo }}</span>
-                                    <form action="/delete_photo" method="post" class="d-inline">
-                                        <input type="hidden" name="filename" value="{{ photo }}">
-                                        <button type="submit" class="btn btn-link text-danger p-0 text-decoration-none">×</button>
-                                    </form>
-                                </div>
-                                {% else %}
-                                <div class="list-group-item text-muted text-center py-2 small">No photos uploaded</div>
-                                {% endfor %}
-                            </div>
-                        </div>
-
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-8 col-xl-8 mb-4">
-                <div class="card shadow-sm"> <div class="card-header py-2 d-flex justify-content-between align-items-center bg-white">
-                        <span>Current Display</span>
-                        <small class="text-muted">Updated: {{ last_update }}</small>
-                    </div>
-                    <div class="card-body preview-container d-flex flex-column justify-content-center">
-                        <div class="row g-3">
-                            <div class="col-md-6 text-center">
-                                <div class="preview-label">Source (RGB)</div>
-                                <a href="/image/source" target="_blank"><img src="/image/source" id="imgSource" class="weather-img shadow-sm" alt="Raw"></a>
-                            </div>
-                            <div class="col-md-6 text-center">
-                                <div class="preview-label">Dithered (E-Ink)</div>
-                                <a href="/image/dithered" target="_blank"><img src="/image/dithered" id="imgDithered" class="weather-img shadow-sm pixelated" alt="Dithered"></a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-        </div>
-    </div>
-
-    <div class="modal fade" id="citySearchModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header"><h5 class="modal-title">Select City</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
-                <div class="modal-body p-0"><div id="citySearchResults" class="list-group list-group-flush"></div></div>
+        <div id="photoManagerContainer" class="card shadow-sm mt-3 d-none">
+            <div class="card-body">
+                {% include 'partials/photo_manager.html' %}
             </div>
         </div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
-        // Pass server config to JS
-        const CURRENT_MODE = "{{ config.get('display_mode', 'weather') }}";
+    <div class="col-lg-8 col-xl-8 mb-4">
+        
+        <div class="card shadow-sm mb-4">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center bg-white">
+                <span>Current Display</span>
+                <small class="text-muted">Updated: {{ last_update }}</small>
+            </div>
+            <div class="card-body preview-container d-flex flex-column justify-content-center">
+                <div class="row g-3">
+                    <div class="col-md-6 text-center">
+                        <div class="preview-label">Source (RGB)</div>
+                        <a href="/image/source" target="_blank"><img src="/image/source" id="imgSource" class="weather-img shadow-sm" alt="Raw"></a>
+                    </div>
+                    <div class="col-md-6 text-center">
+                        <div class="preview-label">Dithered (E-Ink)</div>
+                        <a href="/image/dithered" target="_blank"><img src="/image/dithered" id="imgDithered" class="weather-img shadow-sm pixelated" alt="Dithered"></a>
+                    </div>
+                </div>
+                
+                <div class="mt-4 pt-3 border-top border-secondary d-flex justify-content-center align-items-center gap-3">
+                    <span class="text-white-50 small">Quick Dither Test:</span>
+                    <select id="liveDitherMethod" class="form-select form-select-sm w-auto bg-dark text-white border-secondary">
+                        <option value="floyd_steinberg">Floyd-Steinberg</option>
+                        <option value="none">None (Nearest)</option>
+                    </select>
+                    <button type="button" onclick="updateDither()" class="btn btn-sm btn-info text-white fw-bold">Apply to Preview</button>
+                </div>
+            </div>
+        </div>
 
-        document.addEventListener("DOMContentLoaded", function() {
-            // 1. Determine which tab to show
-            const tabKey = "weatherDisplay_activeTab";
-            let savedTab = sessionStorage.getItem(tabKey);
-            let targetTab = '#tab-general'; // Default fallback
+        <div class="card shadow-sm" id="graphEditorCard">
+            <div class="card-body">
+                {% include 'partials/graph_settings.html' %}
+            </div>
+        </div>
 
-            if (savedTab) {
-                targetTab = savedTab;
-            } else {
-                // First visit logic: if in Photo Mode, go to Photos Tab
-                if (CURRENT_MODE === 'photo') {
-                    targetTab = '#tab-photos';
-                }
-            }
+    </div>
 
-            // 2. Activate Tab
-            const triggerEl = document.querySelector(`button[data-bs-target="${targetTab}"]`);
-            if (triggerEl) {
-                const tabInstance = new bootstrap.Tab(triggerEl);
-                tabInstance.show();
-            }
+</div>
 
-            // 3. Initial Visibility for Photo Manager
-            togglePhotoManager(targetTab);
+{% endblock %}
 
-            // 4. Save state on change
-            const tabEls = document.querySelectorAll('button[data-bs-toggle="tab"]');
-            tabEls.forEach(el => {
-                el.addEventListener('shown.bs.tab', event => {
-                    const activeId = event.target.getAttribute('data-bs-target');
-                    sessionStorage.setItem(tabKey, activeId);
-                    togglePhotoManager(activeId);
+{% block modals %}
+<div class="modal fade" id="citySearchModal" tabindex="-1">
+    <div class="modal-dialog"><div class="modal-content"><div class="modal-header"><h5 class="modal-title">Select City</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body p-0"><div id="citySearchResults" class="list-group list-group-flush"></div></div></div></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let saveTimeout;
+    const form = document.getElementById('settingsForm');
+    const statusBadge = document.getElementById('globalStatus');
+
+    // --- AUTO-SAVE LOGIC ---
+    function triggerAutoSave() {
+        if(statusBadge) {
+            statusBadge.className = "badge bg-warning ms-3"; 
+            statusBadge.innerText = "Saving...";
+            statusBadge.classList.remove('d-none');
+        }
+
+        clearTimeout(saveTimeout);
+        saveTimeout = setTimeout(async () => {
+            const formData = new FormData(form);
+            const graphCard = document.getElementById('graphEditorCard');
+            if(graphCard) {
+                const inputs = graphCard.querySelectorAll('input, select, textarea');
+                inputs.forEach(el => {
+                    if (el.name && !el.disabled) {
+                        if (el.type === 'checkbox' || el.type === 'radio') {
+                            if (el.checked) formData.append(el.name, el.value);
+                        } else {
+                            formData.append(el.name, el.value);
+                        }
+                    }
                 });
+            }
+
+            try {
+                const response = await fetch('/update_settings', {
+                    method: 'POST', body: formData, headers: { 'X-Auto-Save': 'true' }
+                });
+                if (response.ok) {
+                    if(statusBadge) {
+                        statusBadge.className = "badge bg-success ms-3"; 
+                        statusBadge.innerText = "Saved";
+                        setTimeout(() => statusBadge.classList.add('d-none'), 2000);
+                    }
+                } else {
+                    if(statusBadge) { statusBadge.className = "badge bg-danger ms-3"; statusBadge.innerText = "Error"; }
+                }
+            } catch (e) { 
+                console.error("Save failed", e); 
+                if(statusBadge) { statusBadge.className = "badge bg-danger ms-3"; statusBadge.innerText = "Network Error"; } 
+            }
+        }, 800); 
+    }
+
+    // --- DYNAMIC API KEY VISIBILITY ---
+    function updateApiVisibility() {
+        const provider = document.getElementById('weatherProviderSelect').value;
+        document.querySelectorAll('.apikey-group').forEach(el => el.style.display = 'none');
+        if(provider === 'openweathermap' || provider === 'owm') {
+            const el = document.getElementById('apikey_owm'); if(el) el.style.display = 'block';
+        } else if(provider === 'meteomatics') {
+            const el = document.getElementById('apikey_meteomatics'); if(el) el.style.display = 'block';
+        } else if(provider === 'smhi') {
+            const el = document.getElementById('apikey_smhi'); if(el) el.style.display = 'block';
+        }
+    }
+
+    const inputs = document.querySelectorAll('input, select, textarea');
+    inputs.forEach(el => {
+        el.addEventListener('input', triggerAutoSave);
+        el.addEventListener('change', triggerAutoSave);
+    });
+    const providerSelect = document.getElementById('weatherProviderSelect');
+    if(providerSelect) providerSelect.addEventListener('change', updateApiVisibility);
+
+    document.addEventListener("DOMContentLoaded", function() {
+        updateApiVisibility();
+        const tabKey = "weatherDisplay_activeTab";
+        const savedTab = sessionStorage.getItem(tabKey) || '#tab-general';
+        const triggerEl = document.querySelector(`button[data-bs-target="${savedTab}"]`);
+        if (triggerEl) { const tabInstance = new bootstrap.Tab(triggerEl); tabInstance.show(); }
+        togglePhotoManager(savedTab);
+        const tabEls = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        tabEls.forEach(el => {
+            el.addEventListener('shown.bs.tab', event => {
+                const activeId = event.target.getAttribute('data-bs-target');
+                sessionStorage.setItem(tabKey, activeId);
+                togglePhotoManager(activeId);
             });
         });
+    });
 
-        function togglePhotoManager(targetId) {
-            const pm = document.getElementById('photoManagerContainer');
-            if (targetId === '#tab-photos') {
-                pm.classList.remove('d-none');
-            } else {
-                pm.classList.add('d-none');
+    function togglePhotoManager(targetId) {
+        const pm = document.getElementById('photoManagerContainer');
+        if(!pm) return;
+        if (targetId === '#tab-photos') pm.classList.remove('d-none');
+        else pm.classList.add('d-none');
+    }
+
+    async function updateDither() {
+        const method = document.getElementById('liveDitherMethod').value;
+        const formData = new FormData();
+        formData.append('method', method);
+        try {
+            const btn = document.querySelector('button[onclick="updateDither()"]');
+            const originalText = btn.innerText;
+            btn.innerText = "Processing..."; btn.disabled = true;
+            const res = await (await fetch('/apply_dither', { method: 'POST', body: formData })).json();
+            if (res.success) document.getElementById('imgDithered').src = "/image/dithered?t=" + Date.now();
+            else alert("Error: " + res.error);
+            btn.innerText = originalText; btn.disabled = false;
+        } catch (e) { alert("Network Error"); }
+    }
+
+    const modal = new bootstrap.Modal(document.getElementById('citySearchModal'));
+    async function openCitySearch() {
+        const city = document.getElementById('inputCityName').value;
+        if(!city) { alert("Enter city name"); return; }
+        const fd = new FormData(); fd.append('city_name', city);
+        const list = document.getElementById('citySearchResults');
+        list.innerHTML = '<div class="p-3 text-center">Searching...</div>';
+        modal.show();
+        try {
+            const r = await fetch('/lookup_city', { method: 'POST', body: fd });
+            if (!r.ok) {
+                const text = await r.text();
+                list.innerHTML = `<div class="p-3 text-center text-danger">Server Error (${r.status}): ${text}</div>`;
+                return;
             }
-        }
-
-        // City Search Logic
-        const modal = new bootstrap.Modal(document.getElementById('citySearchModal'));
-        async function openCitySearch() {
-            const city = document.getElementById('inputCityName').value;
-            if(!city) { alert("Enter city name"); return; }
-            const fd = new FormData(); fd.append('city_name', city);
-            const list = document.getElementById('citySearchResults');
-            list.innerHTML = '<div class="p-3 text-center">Searching...</div>';
-            modal.show();
-            try {
-                const r = await fetch('/lookup_city', { method: 'POST', body: fd });
-                if (!r.ok) throw new Error(await r.text());
-                const res = await r.json();
-                if(res.success && res.results.length) {
-                    list.innerHTML = '';
-                    res.results.forEach(x => {
-                        const i = document.createElement('a');
-                        i.className = 'list-group-item list-group-item-action cursor-pointer';
-                        i.innerHTML = `<strong>${x.name}</strong>, ${x.country || ''} <small class="text-muted">${x.admin1 || ''}</small>`;
-                        i.onclick = () => { document.getElementById('inputLat').value = x.latitude; document.getElementById('inputLon').value = x.longitude; modal.hide(); };
-                        list.appendChild(i);
-                    });
-                } else list.innerHTML = '<div class="p-3 text-center text-muted">No results.</div>';
-            } catch(e) { list.innerHTML = '<div class="p-3 text-center text-danger">Error: ' + e.message + '</div>'; }
-        }
-    </script>
-</body>
-</html>
+            const res = await r.json();
+            if(res.success && res.results.length) {
+                list.innerHTML = '';
+                res.results.forEach(x => {
+                    const i = document.createElement('a');
+                    i.className = 'list-group-item list-group-item-action cursor-pointer';
+                    i.innerHTML = `<strong>${x.name}</strong>, ${x.country || ''} <small class="text-muted">${x.admin1 || ''}</small>`;
+                    i.onclick = () => { 
+                        // Update inputs using new IDs
+                        document.getElementById('inputLatitude').value = x.latitude; 
+                        document.getElementById('inputLongitude').value = x.longitude; 
+                        modal.hide();
+                        triggerAutoSave(); 
+                    };
+                    list.appendChild(i);
+                });
+            } else list.innerHTML = '<div class="p-3 text-center text-muted">No results found.</div>';
+        } catch(e) { list.innerHTML = '<div class="p-3 text-center text-danger">Error: ' + e.message + '</div>'; }
+    }
+</script>
+{% endblock %}

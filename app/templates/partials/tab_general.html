@@ -1,0 +1,71 @@
+<h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase">Display Mode</h6>
+<div class="mb-3">
+    <select class="form-select" name="display_mode">
+        <option value="weather" {% if config.get('display_mode') == 'weather' %}selected{% endif %}>Weather Station</option>
+        <option value="photo" {% if config.get('display_mode') == 'photo' %}selected{% endif %}>Photo Frame</option>
+    </select>
+</div>
+
+<h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase">Hardware</h6>
+<div class="row g-2 mb-2">
+    <div class="col-12">
+        <label class="form-label">Profile</label>
+        <select class="form-select form-select-sm" name="hardware_profile">
+            <option value="spectra_e6" {% if config.get('hardware_profile') == 'spectra_e6' %}selected{% endif %}>reTerminal Spectra E6 (800x480)</option>
+            <option value="waveshare_565" {% if config.get('hardware_profile') == 'waveshare_565' %}selected{% endif %}>Waveshare 5.65" (600x448)</option>
+            <option value="waveshare_73" {% if config.get('hardware_profile') == 'waveshare_73' %}selected{% endif %}>Waveshare 7.3" (800x480)</option>
+            <option value="generic" {% if config.get('hardware_profile') == 'generic' %}selected{% endif %}>Generic</option>
+        </select>
+    </div>
+    <div class="col-6">
+        <label class="form-label">Dithering</label>
+        <select class="form-select form-select-sm" name="dithering_method">
+            <option value="floyd_steinberg" {% if config.get('dithering_method') == 'floyd_steinberg' %}selected{% endif %}>Floyd-Steinberg</option>
+            <option value="none" {% if config.get('dithering_method') == 'none' %}selected{% endif %}>None (Nearest)</option>
+        </select>
+    </div>
+    <div class="col-6">
+        <label class="form-label">Output</label>
+        <select class="form-select form-select-sm" name="output_format">
+            <option value="png" {% if config.get('output_format') == 'png' %}selected{% endif %}>PNG</option>
+            <option value="bmp8" {% if config.get('output_format') == 'bmp8' %}selected{% endif %}>BMP 8-bit</option>
+            <option value="bmp24" {% if config.get('output_format') == 'bmp24' %}selected{% endif %}>BMP 24-bit</option>
+        </select>
+    </div>
+</div>
+
+<div class="mb-3">
+    <label class="form-label">Auto-Update (Minutes)</label>
+    <input type="number" class="form-control form-control-sm" name="update_interval_minutes" value="{{ config.get('update_interval_minutes', 0) }}" min="0" placeholder="0 = Off">
+    <div class="form-text mt-0">0 = Manual update only.</div>
+</div>
+
+<h6 class="text-muted border-bottom pb-1 mb-2 mt-3 small text-uppercase">Connectivity</h6>
+
+<div class="form-check form-switch mb-2">
+    <input class="form-check-input" type="checkbox" name="enable_server_push" value="true" id="chkServer" {% if config.get('enable_server_push') %}checked{% endif %}>
+    <label class="form-check-label small" for="chkServer">Enable ESP Push</label>
+</div>
+<div class="mb-3 ps-4 border-start">
+    <input type="text" class="form-control form-control-sm" name="server_ip" value="{{ config.get('server_ip', '') }}" placeholder="ESP IP Address">
+</div>
+
+<div class="form-check form-switch mb-2">
+    <input class="form-check-input" type="checkbox" name="enable_mqtt" value="true" id="chkMqtt" {% if config.get('enable_mqtt') %}checked{% endif %}>
+    <label class="form-check-label small" for="chkMqtt">Enable MQTT</label>
+</div>
+<div class="ps-4 border-start">
+    <div class="input-group input-group-sm mb-2">
+        <input type="text" class="form-control" name="mqtt_broker" placeholder="Broker IP" value="{{ config.get('mqtt_broker', '') }}">
+        <span class="input-group-text">:</span>
+        <input type="number" class="form-control" name="mqtt_port" placeholder="1883" value="{{ config.get('mqtt_port', 1883) }}" style="max-width: 80px;">
+    </div>
+    <div class="row g-2">
+        <div class="col-6">
+            <input type="text" class="form-control form-control-sm" name="mqtt_user" placeholder="User" value="{{ config.get('mqtt_user', '') }}">
+        </div>
+        <div class="col-6">
+            <input type="password" class="form-control form-control-sm" name="mqtt_password" placeholder="Pass" value="{{ config.get('mqtt_password', '') }}">
+        </div>
+    </div>
+</div>

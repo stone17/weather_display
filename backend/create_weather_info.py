@@ -19,20 +19,55 @@ class WeatherService:
         self.config = config
         self.root_dir = root_dir
 
+    def _sanitize_config(self):
+        """
+        Ensures critical config values are the correct types before
+        passing them to the strict provider classes.
+        """
+        # Fix Coordinates (Force Float)
+        # This prevents "London" fallback if they are saved as strings
+        for coord in ['lat', 'lon', 'latitude', 'longitude']:
+            if coord in self.config and self.config[coord] is not None:
+                try:
+                    self.config[coord] = float(self.config[coord])
+                except (ValueError, TypeError):
+                    pass # Keep as is if conversion fails, let provider handle error
+
+        # Fix Cache Duration (Force Int)
+        if 'cache_duration_minutes' in self.config:
+            try:
+                self.config['cache_duration_minutes'] = int(self.config['cache_duration_minutes'])
+            except (ValueError, TypeError):
+                self.config['cache_duration_minutes'] = 60
+
+        # Fix Graph Time Range (Force Int)
+        if 'graph_24h_forecast_config' in self.config:
+            g_cfg = self.config['graph_24h_forecast_config']
+            if 'graph_time_range_hours' in g_cfg:
+                try:
+                    g_cfg['graph_time_range_hours'] = int(g_cfg['graph_time_range_hours'])
+                except (ValueError, TypeError):
+                    g_cfg['graph_time_range_hours'] = 24
+
     async def generate_image(self, width, height, color_palette):
-        """
-        Fetches data, parses it, and renders the weather image.
-        Returns: PIL.Image (RGB) or None
-        """
-        # 1. Fetch Data
+        # 1. Sanitize Config Types (Critical for SMHI)
+        self._sanitize_config()
+
+        # 2. Fetch Data
         provider = get_weather_provider(self.config, self.root_dir)
+        
+        if provider is None:
+            provider_name = self.config.get('weather_provider', 'UNKNOWN')
+            logger.error(f"Failed to initialize weather provider '{provider_name}'. Check your configuration.")
+            return None
+
         if not await provider.fetch_data():
             if not provider.get_current_data():
                  logger.error("Fetch failed and no cache available.")
                  return None
             logger.warning("Fetch failed, using cached data.")
 
-        # 2. Parse Data
+        # 3. Parse Data
         graph_cfg = self.config.get("graph_24h_forecast_config", {})
         wdata = WeatherData(
             provider.get_current_data(), 
@@ -42,21 +77,15 @@ class WeatherService:
             graph_config=graph_cfg
         )
         
-        # 3. Setup Icon Cache
+        # 4. Setup Icon Cache
         cache_dir = os.path.join(self.root_dir, "cache")
         icon_cache = os.path.join(cache_dir, "icon_cache")
         os.makedirs(icon_cache, exist_ok=True)
         
-        # 4. Generate RGB Image
-        # Note: We pass None as output_path because the Orchestrator handles saving now.
-        # We need to tweak image_generator slightly to allow returning without saving,
-        # or we just pass a dummy path that gets overwritten later. 
-        # Actually, looking at image_generator.py, it returns the object regardless.
-        dummy_path = os.path.join(cache_dir, "temp_weather_gen.png")
-        
+        # 5. Generate RGB Image
         img = generate_weather_image(
             wdata, 
-            dummy_path, # Legacy argument, can be ignored if we just use the return
+            None, 
             self.config, 
             self.root_dir, 
             icon_cache_path=icon_cache,

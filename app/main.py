@@ -2,13 +2,11 @@ import asyncio
 import os
 import json
 import logging
-import yaml
 import shutil
 import aiohttp
-from datetime import datetime
-from contextlib import asynccontextmanager
 from typing import Optional, List
-from io import BytesIO
+from contextlib import asynccontextmanager
+from datetime import datetime
 
 from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
@@ -16,178 +14,94 @@ from fastapi.templating import Jinja2Templates
 import paho.mqtt.client as mqtt_client
 from PIL import Image
 
-# --- PATH SETUP ---
+# --- PATH SETUP & DEBUGGING ---
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(APP_DIR)
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
 PHOTOS_DIR = os.path.join(PROJECT_ROOT, "photos")
+CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
+IMG_SOURCE_PATH = os.path.join(CACHE_DIR, "latest_source.png")
 
-# Ensure Photos Dir
-if not os.path.exists(PHOTOS_DIR):
-    os.makedirs(PHOTOS_DIR)
+# Create dirs if missing
+if not os.path.exists(PHOTOS_DIR): os.makedirs(PHOTOS_DIR)
+if not os.path.exists(CACHE_DIR): os.makedirs(CACHE_DIR)
 
 import sys
 if BACKEND_DIR not in sys.path:
     sys.path.append(BACKEND_DIR)
 
-from display_manager import DisplayOrchestrator
+# --- IMPORTS ---
+from create_weather_info import WeatherService
 from dither import DitherProcessor
+from display_manager import DisplayOrchestrator
+from config_manager import ConfigManager
 
-# --- CONFIG & LOGGING ---
-CONFIG_FILE = os.getenv("CONFIG_PATH", os.path.join(PROJECT_ROOT, "config", "config.yaml"))
-CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
-IMG_SOURCE_PATH = os.path.join(CACHE_DIR, "latest_source.png")
-
+# --- LOGGING SETUP ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("WeatherDocker")
 
 flash_message = None
-
-# --- CONFIG MANAGER ---
-class ConfigManager:
-    def __init__(self, base_filepath):
-        self.base_filepath = base_filepath
-        base_dir = os.path.dirname(base_filepath)
-        filename = os.path.basename(base_filepath)
-        name, ext = os.path.splitext(filename)
-        self.local_filepath = os.path.join(base_dir, f"{name}.local{ext}")
-        self.data = {}
-        self.load()
-
-    def load(self):
-        self.data = {}
-        if os.path.exists(self.base_filepath):
-            try:
-                with open(self.base_filepath, 'r') as f:
-                    base = yaml.safe_load(f)
-                    if base: self.data.update(base)
-            except Exception as e:
-                logger.error(f"Base Config Error: {e}")
-
-        if os.path.exists(self.local_filepath):
-            try:
-                with open(self.local_filepath, 'r') as f:
-                    local = yaml.safe_load(f)
-                    if local: self.data.update(local)
-            except Exception as e:
-                logger.error(f"Local Config Error: {e}")
-
-    def save_local(self, updates):
-        try:
-            current = {}
-            if os.path.exists(self.local_filepath):
-                with open(self.local_filepath, 'r') as f:
-                    current = yaml.safe_load(f) or {}
-            
-            clean_updates = {k: v for k, v in updates.items() if v is not None and v != ""}
-            current.update(clean_updates)
-            
-            with open(self.local_filepath, 'w') as f:
-                yaml.dump(current, f, sort_keys=False)
-            self.load()
-        except Exception as e:
-            logger.error(f"Save Error: {e}")
-
+CONFIG_FILE = os.getenv("CONFIG_PATH", os.path.join(PROJECT_ROOT, "config", "config.yaml"))
 cfg = ConfigManager(CONFIG_FILE)
 
-# --- SCHEDULER ---
-class UpdateScheduler:
-    def __init__(self):
-        self.task = None
+# --- HELPER: PATH RESOLUTION ---
+def get_current_dithered_path():
+    """Checks for BMP first (ESP preferred), then PNG."""
+    bmp_path = os.path.join(CACHE_DIR, "latest_dithered.bmp")
+    if os.path.exists(bmp_path): 
+        return bmp_path
+    
+    png_path = os.path.join(CACHE_DIR, "latest_dithered.png")
+    if os.path.exists(png_path): 
+        return png_path
+    
+    return None
 
+# --- SERVICES ---
+class UpdateScheduler:
+    def __init__(self): self.task = None
     def restart(self):
         self.stop()
-        interval = 0
         try:
-            val = cfg.data.get('update_interval_minutes', 0)
-            if val: interval = int(val)
-        except ValueError: 
-            interval = 0
-            
-        if interval > 0:
-            logger.info(f"Scheduler started: Auto-updating every {interval} minutes.")
-            self.task = asyncio.create_task(self._loop(interval))
-        else:
-            logger.info("Scheduler: Auto-update is disabled (0 or invalid).")
-
+            interval = int(cfg.data.get('update_interval_minutes', 0))
+            if interval > 0: 
+                logger.info(f"Scheduler: Auto-update every {interval} min.")
+                self.task = asyncio.create_task(self._loop(interval))
+        except ValueError: pass
     def stop(self):
-        if self.task:
-            self.task.cancel()
-            self.task = None
-
+        if self.task: self.task.cancel(); self.task = None
     async def _loop(self, interval):
         try:
             while True:
                 await asyncio.sleep(interval * 60)
-                logger.info("Scheduler: Triggering scheduled update...")
                 await trigger_weather_update()
-        except asyncio.CancelledError:
-            pass
+        except asyncio.CancelledError: pass
 
 scheduler = UpdateScheduler()
 
-# --- MQTT HANDLER (Updated Logic) ---
 class MqttHandler:
     def __init__(self):
         self.client = mqtt_client.Client()
-        self.client.on_connect = self.on_connect
-        self.client.on_message = self.on_message
+        self.client.on_connect = self.on_connect; self.client.on_message = self.on_message
         self.connected = False
-
     def start(self):
-        # CHECK ENABLE FLAG
-        if not cfg.data.get('enable_mqtt', False):
-            logger.info("MQTT is disabled in settings.")
-            return
-
-        broker = cfg.data.get('mqtt_broker')
-        if not broker: return
-        
+        if not cfg.data.get('enable_mqtt', False): return
         try:
-            user = cfg.data.get('mqtt_user')
-            pwd = cfg.data.get('mqtt_password')
+            user = cfg.data.get('mqtt_user'); pwd = cfg.data.get('mqtt_password')
             if user and pwd: self.client.username_pw_set(user, pwd)
-            
-            port = int(cfg.data.get('mqtt_port', 1883))
-            self.client.connect(broker, port, 60)
+            self.client.connect(cfg.data.get('mqtt_broker'), int(cfg.data.get('mqtt_port', 1883)), 60)
             self.client.loop_start()
-        except Exception as e:
-            logger.error(f"MQTT Connection Failed: {e}")
-            self.connected = False
-
+        except: self.connected = False
     def stop(self):
-        try:
-            self.client.loop_stop(); self.client.disconnect()
-            self.connected = False
-        except Exception: pass
-
-    def on_connect(self, client, userdata, flags, rc):
-        if rc == 0:
-            self.connected = True
-            client.subscribe("weather_display/update")
-            self.publish_discovery(client)
+        try: self.client.loop_stop(); self.client.disconnect(); self.connected = False
+        except: pass
+    def on_connect(self, c, u, f, rc):
+        if rc == 0: self.connected = True; c.subscribe("weather_display/update")
         else: self.connected = False
-
-    def publish_discovery(self, client):
-        topic = "homeassistant/button/weather_display/update/config"
-        payload = {
-            "name": "Refresh Weather Display",
-            "unique_id": "weather_display_refresh_btn",
-            "command_topic": "weather_display/update",
-            "payload_press": "TRIGGER",
-            "icon": "mdi:refresh",
-            "device": {"identifiers": ["weather_display_docker"], "name": "Weather Display", "manufacturer": "Docker"}
-        }
-        try: client.publish(topic, json.dumps(payload), retain=True)
-        except Exception: pass
-
-    def on_message(self, client, userdata, msg):
-        if msg.topic == "weather_display/update":
-            asyncio.run_coroutine_threadsafe(trigger_weather_update(), loop)
+    def on_message(self, c, u, m): asyncio.run_coroutine_threadsafe(trigger_weather_update(), loop)
 
 mqtt_handler = MqttHandler()
 
-# --- HELPER: GEOCODING ---
 async def search_cities_interactive(city_name):
     url = "https://geocoding-api.open-meteo.com/v1/search"
     params = {"name": city_name, "count": 10, "language": "en", "format": "json"}
@@ -195,29 +109,20 @@ async def search_cities_interactive(city_name):
     async with aiohttp.ClientSession() as session:
         try:
             async with session.get(url, params=params, headers=headers) as resp:
-                if resp.status == 200:
-                    data = await resp.json()
-                    return data.get("results", []), None 
-                else: return [], f"API Error {resp.status}"
-        except Exception as e: return [], f"Error: {str(e)}"
+                if resp.status == 200: return (await resp.json()).get("results", []), None
+                return [], f"API Error {resp.status}"
+        except Exception as e: return [], str(e)
 
 async def get_lat_lon_from_city(city_name):
-    results, error = await search_cities_interactive(city_name)
-    if results:
-        res = results[0]
-        return f"{res.get('name')}, {res.get('country')}", res["latitude"], res["longitude"]
+    res, err = await search_cities_interactive(city_name)
+    if res: return f"{res[0]['name']}", res[0]['latitude'], res[0]['longitude']
     return None, None, None
 
-# --- BACKGROUND TASK ---
 async def trigger_weather_update():
     global flash_message
     logger.info("Triggering Display Orchestrator...")
-    
-    # Initialize the Orchestrator with current config
     orchestrator = DisplayOrchestrator(cfg.data, PROJECT_ROOT)
-    
     success, msg = await orchestrator.update_display()
-    
     if success: 
         flash_message = {"type": "success", "text": "Display updated successfully."}
     else: 
@@ -229,6 +134,16 @@ async def trigger_weather_update():
 async def lifespan(app: FastAPI):
     global loop
     loop = asyncio.get_running_loop()
+    
+    # --- DEBUG: PRINT PATHS ON STARTUP ---
+    print("--- PATH DIAGNOSTICS ---")
+    print(f"App Directory:    {APP_DIR}")
+    print(f"Project Root:     {PROJECT_ROOT}")
+    print(f"Cache Directory:  {CACHE_DIR}")
+    print(f"Config File:      {CONFIG_FILE}")
+    print(f"Source Image Exp: {IMG_SOURCE_PATH}")
+    print("------------------------")
+    
     mqtt_handler.start()
     scheduler.restart()
     yield
@@ -238,42 +153,39 @@ async def lifespan(app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory=os.path.join(APP_DIR, "templates"))
 
-def get_current_dithered_path():
-    bmp_path = os.path.join(CACHE_DIR, "latest_dithered.bmp")
-    if os.path.exists(bmp_path): return bmp_path
-    png_path = os.path.join(CACHE_DIR, "latest_dithered.png")
-    if os.path.exists(png_path): return png_path
-    return None
-
 # --- ROUTES ---
 
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     global flash_message
-    cfg.load()
+    cfg.reload()
     last_upd = "Never"
     
     dpath = get_current_dithered_path()
     if dpath:
+        # datetime is now available
         last_upd = datetime.fromtimestamp(os.path.getmtime(dpath)).strftime('%Y-%m-%d %H:%M:%S')
     
     msg = flash_message
     flash_message = None
     
-    # Get photo list
     photos = []
     if os.path.exists(PHOTOS_DIR):
         photos = [f for f in os.listdir(PHOTOS_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.webp'))]
+
+    g_conf = cfg.data.get('graph_24h_forecast_config', {})
+    active_series = [s.get('parameter') for s in g_conf.get('series', [])] if g_conf else []
 
     return templates.TemplateResponse("index.html", {
         "request": request, "config": cfg.data, 
         "providers": ["smhi", "owm", "openmeteo", "meteomatics", "google", "aqicn"], 
         "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg,
-        "photos": photos
+        "photos": photos, "active_graph_series": active_series
     })
 
 @app.get("/image")
 async def get_image():
+    """Serves the final dithered image for the ESP."""
     path = get_current_dithered_path()
     if path:
         return FileResponse(path, headers={
@@ -284,17 +196,56 @@ async def get_image():
 
 @app.get("/image/source")
 async def get_source_image():
+    """Serves raw RGB source for preview."""
     if os.path.exists(IMG_SOURCE_PATH):
         return FileResponse(IMG_SOURCE_PATH, headers={"Cache-Control": "no-cache"})
+    
+    logger.warning(f"404 Source Image. Checked: {IMG_SOURCE_PATH}")
     return HTMLResponse("No source image", status_code=404)
 
 @app.get("/image/dithered")
 async def get_dithered_image():
+    """Serves dithered image for preview."""
     path = get_current_dithered_path()
-    if path: return FileResponse(path, headers={"Cache-Control": "no-cache"})
+    if path: 
+        return FileResponse(path, headers={"Cache-Control": "no-cache"})
+    
+    logger.warning(f"404 Dithered Image. Checked dir: {CACHE_DIR}")
     return HTMLResponse("No dithered image", status_code=404)
 
-# --- PHOTO MANAGEMENT ROUTES ---
+@app.post("/trigger_now")
+async def trigger_now():
+    await trigger_weather_update()
+    return RedirectResponse("/", status_code=303)
+
+@app.post("/apply_dither")
+async def apply_dither(method: str = Form(...)):
+    if not os.path.exists(IMG_SOURCE_PATH): 
+        return JSONResponse({"success": False, "error": "No source image found."})
+    try:
+        img = Image.open(IMG_SOURCE_PATH).convert("RGB")
+        ditherer = DitherProcessor()
+        result = ditherer.process(img, method)
+        
+        fmt = cfg.data.get("output_format", "png")
+        
+        # Cleanup
+        for f in ["latest_dithered.png", "latest_dithered.bmp"]:
+            p = os.path.join(CACHE_DIR, f)
+            if os.path.exists(p): os.remove(p)
+
+        if fmt == "bmp8":
+            result.save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
+        elif fmt == "bmp24":
+            result.convert("RGB").save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
+        else:
+            result.save(os.path.join(CACHE_DIR, "latest_dithered.png"))
+
+        cfg.save_local({'dithering_method': method})
+        return JSONResponse({"success": True})
+    except Exception as e:
+        return JSONResponse({"success": False, "error": str(e)})
+
 @app.post("/upload_photos")
 async def upload_photos(files: List[UploadFile] = File(...)):
     global flash_message
@@ -316,7 +267,6 @@ async def upload_photos(files: List[UploadFile] = File(...)):
 async def delete_photo(filename: str = Form(...)):
     global flash_message
     path = os.path.join(PHOTOS_DIR, filename)
-    # Security check: ensure we stay in photos dir
     if os.path.commonpath([path, PHOTOS_DIR]) == PHOTOS_DIR and os.path.exists(path):
         os.remove(path)
         flash_message = {"type": "info", "text": f"Deleted {filename}."}
@@ -324,91 +274,54 @@ async def delete_photo(filename: str = Form(...)):
         flash_message = {"type": "danger", "text": "File not found or invalid path."}
     return RedirectResponse("/", status_code=303)
 
-# --- CONFIG ROUTES ---
 @app.post("/lookup_city")
 async def lookup_city(city_name: str = Form(...)):
     results, error = await search_cities_interactive(city_name)
     if error: return JSONResponse({"success": False, "error": error})
     return JSONResponse({"success": True, "results": results})
 
-@app.post("/apply_dither")
-async def apply_dither(method: str = Form(...)):
-    if not os.path.exists(IMG_SOURCE_PATH): return JSONResponse({"success": False, "error": "No source"})
-    try:
-        img = Image.open(IMG_SOURCE_PATH).convert("RGB")
-        ditherer = DitherProcessor()
-        result = ditherer.process(img, method)
-        
-        fmt = cfg.data.get("output_format", "png")
-        for f in ["latest_dithered.png", "latest_dithered.bmp"]:
-            p = os.path.join(CACHE_DIR, f)
-            if os.path.exists(p): os.remove(p)
-
-        if fmt == "bmp8": result.save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
-        elif fmt == "bmp24": result.convert("RGB").save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
-        else: result.save(os.path.join(CACHE_DIR, "latest_dithered.png"))
-
-        cfg.save_local({'dithering_method': method})
-        return JSONResponse({"success": True})
-    except Exception as e: return JSONResponse({"success": False, "error": str(e)})
-
 @app.post("/update_settings")
 async def update_settings(
-    # Connectivity Toggles (Checkboxes send "on" or are missing)
-    enable_mqtt: bool = Form(False),
-    enable_server_push: bool = Form(False),
-    
-    mqtt_broker: str = Form(""), mqtt_port: int = Form(1883),
-    mqtt_user: str = Form(""), mqtt_password: str = Form(""),
-    server_ip: str = Form(""), weather_provider: str = Form(...),
-    city_name: str = Form(""), lat: str = Form(""), lon: str = Form(""),
-    hardware_profile: str = Form(...), dithering_method: str = Form("floyd_steinberg"),
-    output_format: str = Form("png"),
-    update_interval_minutes: int = Form(0),
-    display_mode: str = Form("weather"),
-    photo_sort_order: str = Form("random") # New Parameter
+    request: Request,
+    enable_mqtt: bool = Form(False), enable_server_push: bool = Form(False),
+    current_details: List[str] = Form([]), daily_details: List[str] = Form([]),
+    graph_series: List[str] = Form([])
 ):
     global flash_message
-    width, height = 600, 448
-    if hardware_profile == "spectra_e6" or hardware_profile == "waveshare_73":
-        width, height = 800, 480
-
-    updates = {
-        'enable_mqtt': enable_mqtt,
-        'enable_server_push': enable_server_push,
-        'mqtt_broker': mqtt_broker, 'mqtt_port': mqtt_port,
-        'mqtt_user': mqtt_user, 'mqtt_password': mqtt_password,
-        'server_ip': server_ip, 'weather_provider': weather_provider,
-        'hardware_profile': hardware_profile,
-        'dithering_method': dithering_method,
-        'output_format': output_format,
-        'update_interval_minutes': update_interval_minutes,
-        'display_mode': display_mode,
-        'photo_sort_order': photo_sort_order, # Saved
-        'display_width': width, 'display_height': height,
-        'lat': float(lat) if lat else None,
-        'lon': float(lon) if lon else None,
+    form_data = await request.form()
+    
+    # CRITICAL FIX: SANITIZE FORM DATA
+    data_dict = {
+        k: v for k, v in form_data.items() 
+        if not isinstance(v, UploadFile)
     }
+    
+    data_dict['enable_mqtt'] = enable_mqtt
+    data_dict['enable_server_push'] = enable_server_push
+    data_dict['current_weather_display_details'] = current_details
+    data_dict['daily_forecast_display_details'] = daily_details
+    data_dict['graph_series'] = graph_series
 
-    status_text = "Settings saved."
-    if city_name:
-        if not lat or not lon:
-            resolved_name, new_lat, new_lon = await get_lat_lon_from_city(city_name)
-            if resolved_name:
-                updates['lat'] = new_lat; updates['lon'] = new_lon
-                status_text = f"Auto-resolved '{city_name}'."
-            else: status_text = f"Could not find '{city_name}'."
-        else: status_text = "Settings saved (coordinates trusted)."
+    # Auto-City Lookup
+    city_name = data_dict.get('city_name')
+    # Standardized on latitude/longitude
+    lat = data_dict.get('latitude'); lon = data_dict.get('longitude')
+    
+    status_text = "Settings Saved."
+    if city_name and (not lat or not lon):
+        res_name, n_lat, n_lon = await get_lat_lon_from_city(city_name)
+        if res_name:
+            data_dict['latitude'] = n_lat; data_dict['longitude'] = n_lon
+            status_text = f"Saved. Auto-resolved: {res_name}"
 
-    cfg.save_local(updates)
+    # Save
+    cfg.update_from_form(data_dict)
     
     mqtt_handler.stop(); mqtt_handler.start()
     scheduler.restart()
     
-    flash_message = {"type": "info", "text": status_text}
-    return RedirectResponse("/", status_code=303)
+    if request.headers.get("X-Auto-Save") == "true":
+        return JSONResponse({"success": True, "message": status_text})
 
-@app.post("/trigger_now")
-async def trigger_now():
-    await trigger_weather_update()
+    flash_message = {"type": "info", "text": status_text}
     return RedirectResponse("/", status_code=303)

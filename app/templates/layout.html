@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Display Manager</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css">
+    <style>
+        .pixelated { image-rendering: pixelated; image-rendering: crisp-edges; }
+        .preview-container { background-color: #212529; border-radius: 4px; padding: 15px; }
+        .preview-label { color: #ccc; font-size: 0.85rem; margin-bottom: 5px; font-weight: 500; }
+        .weather-img { max-width: 100%; height: auto; border: 1px solid #444; border-radius: 3px; background-color: white; }
+        .form-label { font-size: 0.8rem; margin-bottom: 0.2rem; font-weight: 600; color: #495057; }
+        .form-text { font-size: 0.75rem; }
+        .card-header { font-weight: 600; background-color: #fff; }
+        .cursor-pointer { cursor: pointer; }
+        .list-group-item-action:hover { background-color: #f8f9fa; }
+        
+        /* Compact Form Controls for Editor */
+        .form-control-xs, .form-select-xs {
+            padding: 0.1rem 0.25rem;
+            font-size: 0.75rem;
+            line-height: 1.5;
+            border-radius: 0.2rem;
+            height: 24px;
+        }
+        .input-group-xs > .form-control,
+        .input-group-xs > .input-group-text,
+        .input-group-xs > .btn {
+            padding: 0.1rem 0.25rem;
+            font-size: 0.75rem;
+            height: 24px;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    
+    <nav class="navbar navbar-light bg-white border-bottom shadow-sm mb-4">
+        <div class="container-fluid px-4">
+            <div class="d-flex align-items-center">
+                <span class="navbar-brand mb-0 h1">🖥️&nbsp; Display Manager</span>
+                <span id="globalStatus" class="badge bg-secondary ms-3 d-none">Ready</span>
+            </div>
+            
+            <button type="button" onclick="triggerForceUpdate()" class="btn btn-primary btn-sm fw-bold">
+                🔄 Force Update
+            </button>
+        </div>
+    </nav>
+
+    <div class="container-fluid px-4">
+        {% if message %}
+        <div class="alert alert-{{ message.type }} alert-dismissible fade show py-2 mb-3">
+            {{ message.text }}
+            <button type="button" class="btn-close pb-2" data-bs-dismiss="alert"></button>
+        </div>
+        {% endif %}
+
+        {% if not mqtt_status %}
+        <div class="alert alert-warning py-2 mb-3">⚠️ <strong>MQTT Offline</strong></div>
+        {% endif %}
+
+        {% block content %}{% endblock %}
+    </div>
+
+    {% block modals %}{% endblock %}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        async function triggerForceUpdate() {
+            const badge = document.getElementById('globalStatus');
+            const btn = document.querySelector('button[onclick="triggerForceUpdate()"]');
+            
+            // UI State: Updating
+            badge.className = "badge bg-info ms-3";
+            badge.innerText = "Updating...";
+            badge.classList.remove('d-none');
+            btn.disabled = true;
+
+            try {
+                await fetch('/trigger_now', { method: 'POST' });
+                
+                // UI State: Success
+                badge.className = "badge bg-success ms-3";
+                badge.innerText = "Updated";
+                
+                // Refresh Image Preview with timestamp
+                const imgSource = document.getElementById('imgSource');
+                const imgDithered = document.getElementById('imgDithered');
+                const ts = new Date().getTime();
+                if(imgSource) imgSource.src = "/image/source?" + ts;
+                if(imgDithered) imgDithered.src = "/image/dithered?" + ts;
+
+            } catch (e) {
+                console.error(e);
+                badge.className = "badge bg-danger ms-3";
+                badge.innerText = "Failed";
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => {
+                    if(badge.innerText === "Updated") badge.classList.add('d-none');
+                }, 3000);
+            }
+        }
+    </script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,318 @@
+{% set graph_cfg = config.get('graph_24h_forecast_config', {}) %}
+{% set series_list = graph_cfg.get('series', []) %}
+{% set legend_cfg = graph_cfg.get('legend', {}) %}
+{% set std_leg = legend_cfg.get('standard_legend', {}) %}
+{% set peak_leg = legend_cfg.get('peak_value_display', {}) %}
+{% set wa = graph_cfg.get('wind_arrows', {}) %}
+{% set dn = graph_cfg.get('day_night_highlight', {}) %}
+
+{% macro render_series_row(param_id, label, def_color, def_axis) %}
+    {# Re-fetch series_list inside macro to access it robustly #}
+    {% set m_series_list = config.get('graph_24h_forecast_config', {}).get('series', []) %}
+    
+    {# Find existing config #}
+    {% set ns = namespace(conf=none, is_fill_wind=false) %}
+    
+    {% for s in m_series_list %}
+        {% if s.parameter == param_id %}{% set ns.conf = s %}
+        {% elif param_id == 'wind_gust' and s.parameter == 'wind_gusts' %}{% set ns.conf = s %}
+        {% endif %}
+        
+        {# Detect separated wind fill entry #}
+        {% if param_id == 'wind_gust' and s.plot_type == 'fill_between_two_series' and s.series2_param_name == 'wind_gust' %}
+            {% set ns.is_fill_wind = true %}
+        {% endif %}
+    {% endfor %}
+
+    {% set s_conf = ns.conf %}
+    {% set is_active = (s_conf is not none) %}
+    
+    <div class="border-bottom py-2">
+        <div class="d-flex align-items-center flex-wrap gap-2">
+            <div class="form-check m-0 me-2" style="min-width: 120px;">
+                <input class="form-check-input" type="checkbox" name="series_{{param_id}}_enabled" value="true" id="chk_{{param_id}}" {% if is_active %}checked{% endif %}>
+                <label class="form-check-label fw-bold cursor-pointer" for="chk_{{param_id}}">{{ label }}</label>
+            </div>
+            
+            <input type="color" class="form-control form-control-sm p-0 border-0" style="width: 24px; height: 24px;" name="series_{{param_id}}_color" value="{{ s_conf.color if is_active else def_color }}" title="Primary Color">
+
+            <select class="form-select form-select-sm py-0" name="series_{{param_id}}_axis" style="width: 100px; font-size: 0.8rem;">
+                {% set cur_axis = s_conf.axis if is_active else def_axis %}
+                <option value="left" {% if cur_axis == 'left' %}selected{% endif %}>Left</option>
+                <option value="right" {% if cur_axis == 'right' %}selected{% endif %}>Right</option>
+                <option value="left_hidden" {% if cur_axis == 'left' and s_conf.show_y_axis_tick_labels==false %}selected{% endif %}>Left (Hide)</option>
+                <option value="right_hidden" {% if cur_axis == 'right' and s_conf.show_y_axis_tick_labels==false %}selected{% endif %}>Right (Hide)</option>
+            </select>
+
+            <select class="form-select form-select-sm py-0" name="series_{{param_id}}_fill" style="width: 90px; font-size: 0.8rem;">
+                <option value="none">Line</option>
+                <option value="fill_to_zero" {% if is_active and s_conf.plot_type == 'fill_between' %}selected{% endif %}>Fill Area</option>
+                {% if param_id == 'wind_gust' %}
+                <option value="fill_from_wind" {% if ns.is_fill_wind %}selected{% endif %}>From Wind</option>
+                {% endif %}
+            </select>
+
+            <select class="form-select form-select-sm py-0" name="series_{{param_id}}_style" style="width: 70px; font-size: 0.8rem;">
+                <option value="solid" {% if (s_conf.line_style if is_active else 'solid') == 'solid' %}selected{% endif %}>Solid</option>
+                <option value="dashed" {% if (s_conf.line_style if is_active) == 'dashed' %}selected{% endif %}>Dash</option>
+                <option value="dotted" {% if (s_conf.line_style if is_active) == 'dotted' %}selected{% endif %}>Dot</option>
+            </select>
+            <input type="number" step="0.5" class="form-control form-control-sm py-0" name="series_{{param_id}}_width" value="{{ s_conf.linewidth if is_active else 2 }}" style="width: 50px;" title="Width">
+            
+            <a class="btn btn-sm btn-link p-0 text-decoration-none ms-auto" data-bs-toggle="collapse" href="#det_{{param_id}}" role="button"><i class="bi bi-gear-fill text-secondary"></i></a>
+        </div>
+
+        <div class="collapse mt-2 bg-light rounded p-2 border" id="det_{{param_id}}">
+            <div class="row g-2 mb-2">
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted mb-0">Dual Color (Pos/Neg)</label>
+                    <div class="input-group input-group-sm">
+                        <div class="input-group-text">
+                            <input class="form-check-input mt-0" type="checkbox" name="series_{{param_id}}_dual_color_enabled" value="true" {% if is_active and s_conf.color_negative %}checked{% endif %}>
+                        </div>
+                        <input type="color" class="form-control form-control-sm p-1" name="series_{{param_id}}_color_neg" value="{{ s_conf.color_negative if is_active else '#0000FF' }}" title="Negative Color">
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small text-muted mb-0">Legend Label</label>
+                    <input type="text" class="form-control form-control-sm" name="series_{{param_id}}_legend_label" value="{{ s_conf.legend_label if is_active else label }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-0">Unit</label>
+                    <input type="text" class="form-control form-control-sm" name="series_{{param_id}}_unit" value="{{ s_conf.unit if is_active else '' }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-0">Occupancy (0.1-1.0)</label>
+                    <input type="number" step="0.1" min="0.1" max="1.0" class="form-control form-control-sm" name="series_{{param_id}}_occupancy" value="{{ s_conf.data_occupancy_factor if is_active else 0.8 }}">
+                </div>
+                <div class="col-6 col-md-2">
+                    <label class="form-label small text-muted mb-0">Z / Alpha</label>
+                    <div class="input-group input-group-sm">
+                        <input type="number" step="0.1" class="form-control px-1" name="series_{{param_id}}_zorder" value="{{ s_conf.zorder if is_active else 2.0 }}" title="Z-Order">
+                        <input type="number" step="0.1" max="1" class="form-control px-1" name="series_{{param_id}}_alpha" value="{{ s_conf.alpha if is_active else 0.3 }}" title="Alpha">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row g-2 align-items-center mb-2">
+                <div class="col-auto">
+                    <div class="form-check form-check-inline small">
+                        <input class="form-check-input" type="checkbox" name="series_{{param_id}}_peak" value="true" id="pk_{{param_id}}" {% if is_active and s_conf.show_peak_in_legend %}checked{% endif %}>
+                        <label class="form-check-label" for="pk_{{param_id}}">Show Peak</label>
+                    </div>
+                </div>
+                <div class="col-auto ms-auto d-flex align-items-center gap-1">
+                    <span class="small text-muted">Range:</span>
+                    <select class="form-select form-select-sm py-0" style="width: 70px; height: 22px; font-size: 0.75rem;" name="series_{{param_id}}_scale_mode">
+                        <option value="auto">Auto</option>
+                        <option value="manual" {% if s_conf.scale_type == 'manual_range' %}selected{% endif %}>Man</option>
+                    </select>
+                    <input type="number" class="form-control form-control-sm py-0" name="series_{{param_id}}_min" value="{{ s_conf.y_axis_min if is_active else '' }}" placeholder="Min" style="width: 50px; height: 22px; font-size: 0.75rem;">
+                    <input type="number" class="form-control form-control-sm py-0" name="series_{{param_id}}_max" value="{{ s_conf.y_axis_max if is_active else '' }}" placeholder="Max" style="width: 50px; height: 22px; font-size: 0.75rem;">
+                </div>
+            </div>
+
+            <div class="row g-2 mt-2 border-top pt-2">
+                <div class="col-12"><label class="small fw-bold text-muted">Weather Icons Overlay</label></div>
+                <div class="col-auto">
+                     <div class="form-check form-check-inline small">
+                        {% set sym = s_conf.weather_symbols if is_active and s_conf.weather_symbols else {} %}
+                        <input class="form-check-input" type="checkbox" name="series_{{param_id}}_sym_enabled" value="true" id="sym_{{param_id}}" {% if sym.enabled %}checked{% endif %}>
+                        <label class="form-check-label" for="sym_{{param_id}}">Enabled</label>
+                     </div>
+                </div>
+                <div class="col-auto">
+                    <div class="input-group input-group-sm" style="width: 110px;">
+                        <span class="input-group-text px-1">Size</span>
+                        <input type="number" class="form-control px-1" name="series_{{param_id}}_sym_size" value="{{ sym.icon_size_pixels|default(20) }}">
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <div class="input-group input-group-sm" style="width: 110px;">
+                        <span class="input-group-text px-1">Offs</span>
+                        <input type="number" class="form-control px-1" name="series_{{param_id}}_sym_offset" value="{{ sym.vertical_offset_pixels|default(10) }}">
+                    </div>
+                </div>
+                 <div class="col-auto">
+                    <div class="input-group input-group-sm" style="width: 110px;">
+                        <span class="input-group-text px-1">Intv</span>
+                        <input type="number" class="form-control px-1" name="series_{{param_id}}_sym_interval" value="{{ sym.time_interval_hours|default(4) }}">
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endmacro %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h6 class="m-0 text-primary fw-bold"><i class="bi bi-graph-up"></i> Advanced Graph Editor</h6>
+    <div class="input-group input-group-sm" style="width: 180px;">
+        <span class="input-group-text">Range (H)</span>
+        <input type="number" class="form-control" name="graph_time_range_hours" value="{{ graph_cfg.get('graph_time_range_hours', 24) }}">
+    </div>
+</div>
+
+<ul class="nav nav-tabs mb-3" id="graphTabs" role="tablist">
+    <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#gt-standard" type="button">Standard Data</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#gt-wind" type="button">Wind</button></li>
+    <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#gt-global" type="button">Global Options</button></li>
+</ul>
+
+<div class="tab-content border p-3 bg-white rounded-bottom">
+    <div class="tab-pane fade show active" id="gt-standard">
+        {{ render_series_row('temp', 'Temperature', '#000000', 'left') }}
+        {{ render_series_row('feels_like', 'Feels Like', '#808080', 'left') }}
+        {{ render_series_row('rain', 'Rain', '#0000FF', 'right') }}
+        {{ render_series_row('humidity', 'Humidity', '#555555', 'right') }}
+        {{ render_series_row('pressure', 'Pressure', '#800080', 'right') }}
+    </div>
+    
+    <div class="tab-pane fade" id="gt-wind">
+        <div class="alert alert-light border mb-3">
+            <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" name="wa_enabled" value="true" id="chkWa" {% if wa.get('enabled') %}checked{% endif %}>
+                <label class="form-check-label fw-bold" for="chkWa">Overlay Wind Direction Arrows</label>
+            </div>
+            <div class="d-flex align-items-center gap-3 ps-4">
+                <div class="d-flex align-items-center gap-2">
+                    <label class="small">Color:</label>
+                    <input type="color" class="form-control form-control-sm p-0 border-0" style="width: 24px; height: 24px;" name="wa_color" value="{{ wa.get('color', '#000000') }}">
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <label class="small">Size:</label>
+                    <input type="number" class="form-control form-control-sm" style="width: 60px;" name="wa_size" value="{{ wa.get('size', 10) }}">
+                </div>
+            </div>
+        </div>
+        {{ render_series_row('wind_speed', 'Wind Speed', '#008000', 'right') }}
+        {{ render_series_row('wind_gust', 'Wind Gusts', '#FF0000', 'right') }}
+    </div>
+    
+    <div class="tab-pane fade" id="gt-global">
+        
+        <h6 class="small fw-bold text-uppercase mb-2 text-muted border-bottom">Axis & Grid</h6>
+        <div class="row g-2 mb-3">
+            <div class="col-4"><label class="small">Font Size</label></div>
+            <div class="col-8"><input type="number" class="form-control form-control-sm" name="base_font_size" value="{{ graph_cfg.get('base_font_size', 10) }}"></div>
+            
+            <div class="col-4"><label class="small">X-Axis</label></div>
+            <div class="col-8">
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control" name="x_axis_time_format" value="{{ graph_cfg.get('x_axis_time_format', '%H:%M') }}" placeholder="Fmt">
+                    <input type="number" class="form-control" name="x_axis_hour_interval" value="{{ graph_cfg.get('x_axis_hour_interval', 6) }}" placeholder="Int">
+                    <input type="number" class="form-control" name="x_axis_tick_rotation" value="{{ graph_cfg.get('x_axis_tick_rotation', 0) }}" placeholder="Rot">
+                </div>
+            </div>
+
+            <div class="col-12 mt-1">
+                <div class="d-flex justify-content-between">
+                    <div class="form-check form-check-inline small"><input class="form-check-input" type="checkbox" name="show_x_grid" value="true" id="gx" {% if graph_cfg.get('show_x_grid', true) %}checked{% endif %}><label class="form-check-label" for="gx">X-Grid</label></div>
+                    <div class="form-check form-check-inline small"><input class="form-check-input" type="checkbox" name="show_y_grid_left" value="true" id="gl" {% if graph_cfg.get('show_y_grid_left', true) %}checked{% endif %}><label class="form-check-label" for="gl">L-Grid</label></div>
+                    <div class="form-check form-check-inline small"><input class="form-check-input" type="checkbox" name="show_y_grid_right" value="true" id="gr" {% if graph_cfg.get('show_y_grid_right', true) %}checked{% endif %}><label class="form-check-label" for="gr">R-Grid</label></div>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="small fw-bold text-uppercase mb-2 text-muted border-bottom">Legends</h6>
+        <div class="card card-body p-2 bg-light mb-3">
+             <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" name="std_leg_enabled" value="true" id="chkStdLeg" {% if std_leg.get('enabled') %}checked{% endif %}>
+                <label class="form-check-label fw-bold" for="chkStdLeg">Standard Legend</label>
+            </div>
+            <div class="row g-2">
+                <div class="col-6">
+                    <select class="form-select form-select-sm" name="legend_position">
+                        <option value="best" {% if std_leg.get('position') == 'best' %}selected{% endif %}>Best</option>
+                        <option value="upper left" {% if std_leg.get('position') == 'upper left' %}selected{% endif %}>Top L</option>
+                        <option value="upper right" {% if std_leg.get('position') == 'upper right' %}selected{% endif %}>Top R</option>
+                        <option value="bottom" {% if std_leg.get('position') == 'bottom' %}selected{% endif %}>Bottom</option>
+                    </select>
+                </div>
+                 <div class="col-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Cols</span>
+                        <input type="number" class="form-control" name="legend_columns" value="{{ std_leg.get('columns', 2) }}">
+                    </div>
+                </div>
+                <div class="col-6">
+                     <div class="form-check small mt-1">
+                        <input class="form-check-input" type="checkbox" name="std_leg_frame" value="true" id="chkLegFrame" {% if std_leg.get('frame_on') %}checked{% endif %}>
+                        <label class="form-check-label" for="chkLegFrame">Frame</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card card-body p-2 bg-light mb-3">
+             <div class="form-check form-switch mb-2">
+                <input class="form-check-input" type="checkbox" name="peak_leg_enabled" value="true" id="chkPkLeg" {% if peak_leg.get('enabled') %}checked{% endif %}>
+                <label class="form-check-label fw-bold" for="chkPkLeg">Peak Value Legend (High/Low)</label>
+            </div>
+            <div class="row g-2">
+                 <div class="col-6">
+                    <select class="form-select form-select-sm" name="peak_leg_location">
+                        <option value="in_graph" {% if peak_leg.get('location') == 'in_graph' %}selected{% endif %}>Inside Graph</option>
+                        <option value="above_graph" {% if peak_leg.get('location') == 'above_graph' %}selected{% endif %}>Above Graph</option>
+                    </select>
+                </div>
+                <div class="col-6">
+                     <select class="form-select form-select-sm" name="peak_leg_align">
+                        <option value="left" {% if peak_leg.get('horizontal_alignment') == 'left' %}selected{% endif %}>Left</option>
+                        <option value="right" {% if peak_leg.get('horizontal_alignment') == 'right' %}selected{% endif %}>Right</option>
+                    </select>
+                </div>
+                 <div class="col-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text">Y%</span>
+                        <input type="number" step="0.01" class="form-control" name="peak_leg_anchor_y" value="{{ peak_leg.get('axis_start_anchor_y', 0.97) }}">
+                    </div>
+                </div>
+                 <div class="col-6">
+                     <div class="form-check small mt-1">
+                        {% set bbox = peak_leg.get('text_bbox', {}) %}
+                        <input class="form-check-input" type="checkbox" name="peak_leg_box" value="true" id="chkPkBox" {% if bbox.get('enabled') %}checked{% endif %}>
+                        <label class="form-check-label" for="chkPkBox">Background Box</label>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <h6 class="small fw-bold text-uppercase mb-2 text-muted border-bottom">Day/Night Highlight</h6>
+        <div class="row g-2 align-items-center">
+            <div class="col-auto">
+                 <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" name="dn_enabled" value="true" id="chkDn" {% if dn.get('enabled') %}checked{% endif %}>
+                    <label class="form-check-label" for="chkDn">Enabled</label>
+                </div>
+            </div>
+            <div class="col">
+                <input type="color" class="form-control form-control-sm p-0 border-0" style="width: 100%; height: 24px;" name="dn_color" value="{{ dn.get('color', '#D3D3D3') }}">
+            </div>
+            <div class="col">
+                <input type="number" step="0.1" min="0" max="1" class="form-control form-control-sm" name="dn_alpha" value="{{ dn.get('alpha', 0.3) }}" placeholder="Alpha">
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // JS Fix for Color Inputs: Convert named colors to Hex
+    document.addEventListener("DOMContentLoaded", function() {
+        const colorMap = {
+            "lightgrey": "#D3D3D3", "lightgray": "#D3D3D3", "darkgrey": "#A9A9A9", "darkgray": "#A9A9A9",
+            "grey": "#808080", "gray": "#808080", "white": "#FFFFFF", "black": "#000000",
+            "red": "#FF0000", "green": "#008000", "blue": "#0000FF", "yellow": "#FFFF00",
+            "darkgreen": "#006400", "lightgreen": "#90EE90", "purple": "#800080", "orange": "#FFA500"
+        };
+        
+        document.querySelectorAll('input[type="color"]').forEach(input => {
+            let val = input.getAttribute('value');
+            if (val && !val.startsWith('#')) {
+                const lowerVal = val.toLowerCase().replace(/\s/g, '');
+                if (colorMap[lowerVal]) {
+                    input.value = colorMap[lowerVal];
+                }
+            }
+        });
+    });
+</script>

@@ -8,11 +8,10 @@ try:
 except ImportError:
     LANCZOS_FILTER = Image.LANCZOS
 
-# --- CRITICAL FIX: Set Backend for Headless/Docker ---
+# Set Backend for Headless/Docker
 import matplotlib
 matplotlib.use('Agg') 
 import matplotlib.pyplot as plt
-# -----------------------------------------------------
 
 import matplotlib.dates as mdates
 from matplotlib.path import Path
@@ -618,6 +617,7 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
         fonts['small'] = ImageFont.load_default()
         graph_base_font_size = 10
 
+    # --- ARCHITECTURE FIX: Use injected palette or safe defaults ---
     if color_palette:
         colors = color_palette
     else:
@@ -696,9 +696,12 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
         fonts, colors, icon_cache_path=icon_cache_path
     )
 
-    try:
-        image_canvas.save(output_path)
-        return image_canvas
-    except Exception as e:
-        print(f"Error saving image: {e}")
-        return None
+    # --- FIX: Only save if path is provided ---
+    if output_path:
+        try:
+            image_canvas.save(output_path)
+        except Exception as e:
+            print(f"Error saving image to {output_path}: {e}")
+            # Don't return None here, the object is valid, just file save failed
+    
+    return image_canvas

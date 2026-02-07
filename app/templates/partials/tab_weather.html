@@ -1,0 +1,102 @@
+<h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase">Source</h6>
+<div class="mb-2">
+    <label class="form-label">Provider</label>
+    <select class="form-select form-select-sm" name="weather_provider" id="weatherProviderSelect">
+        {% for p in providers %}
+        <option value="{{ p }}" {% if config.get('weather_provider') == p %}selected{% endif %}>{{ p|upper }}</option>
+        {% endfor %}
+    </select>
+</div>
+
+<div class="mb-3 bg-light p-2 rounded border">
+    <label class="form-label small fw-bold text-muted mb-1">Provider Settings</label>
+    
+    <div id="apikey_owm" class="apikey-group" style="display:none;">
+        <label class="form-label small text-muted mb-0">OpenWeatherMap Key</label>
+        <input type="text" class="form-control form-control-sm" name="openweathermap_api_key" value="{{ config.get('openweathermap_api_key', '') }}" placeholder="Required">
+    </div>
+
+    <div id="apikey_meteomatics" class="apikey-group" style="display:none;">
+        <div class="row g-2">
+            <div class="col-6">
+                <label class="form-label small text-muted mb-0">Username</label>
+                <input type="text" class="form-control form-control-sm" name="meteomatics_username" value="{{ config.get('meteomatics_username', '') }}">
+            </div>
+            <div class="col-6">
+                <label class="form-label small text-muted mb-0">Password</label>
+                <input type="password" class="form-control form-control-sm" name="meteomatics_password" value="{{ config.get('meteomatics_password', '') }}">
+            </div>
+        </div>
+    </div>
+    
+    <div id="apikey_smhi" class="apikey-group" style="display:none;">
+        <small class="text-muted fst-italic">No API key required for SMHI.</small>
+    </div>
+
+    <div class="mt-2 pt-2 border-top">
+        <a class="text-decoration-none small text-secondary" data-bs-toggle="collapse" href="#supplementalKeys" role="button">
+            <i class="bi bi-gear"></i> Supplemental Keys (Google / AQICN)
+        </a>
+        <div class="collapse mt-2" id="supplementalKeys">
+            <div class="mb-2">
+                <label class="form-label small text-muted mb-0">Google API Key (Geocoding/Weather)</label>
+                <input type="text" class="form-control form-control-sm" name="google_api_key" value="{{ config.get('google_api_key', '') }}">
+            </div>
+            <div class="mb-0">
+                <label class="form-label small text-muted mb-0">AQICN Token</label>
+                <input type="text" class="form-control form-control-sm" name="aqicn_api_token" value="{{ config.get('aqicn_api_token', '') }}">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-2">
+    <label class="form-label">Location</label>
+    <div class="input-group input-group-sm">
+        <input type="text" class="form-control" id="inputCityName" name="city_name" placeholder="City Name">
+        <button class="btn btn-outline-primary" type="button" onclick="openCitySearch()">Search</button>
+    </div>
+</div>
+<div class="row g-2 mb-3">
+    <div class="col-6"><input type="text" class="form-control form-control-sm" id="inputLatitude" name="latitude" placeholder="Lat" value="{{ config.get('latitude', '') }}"></div>
+    <div class="col-6"><input type="text" class="form-control form-control-sm" id="inputLongitude" name="longitude" placeholder="Lon" value="{{ config.get('longitude', '') }}"></div>
+</div>
+
+<h6 class="text-muted border-bottom pb-1 mb-2 mt-3 small text-uppercase">Preferences</h6>
+<div class="row g-2 mb-3">
+    <div class="col-6">
+        <label class="form-label">Unit</label>
+        <select class="form-select form-select-sm" name="temperature_unit">
+            <option value="C" {% if config.get('temperature_unit', 'C') == 'C' %}selected{% endif %}>Celsius (°C)</option>
+            <option value="F" {% if config.get('temperature_unit') == 'F' %}selected{% endif %}>Fahrenheit (°F)</option>
+        </select>
+    </div>
+    <div class="col-6">
+        <label class="form-label">Cache (Min)</label>
+        <input type="number" class="form-control form-control-sm" name="cache_duration_minutes" value="{{ config.get('cache_duration_minutes', 60) }}">
+    </div>
+</div>
+
+<h6 class="text-muted border-bottom pb-1 mb-2 mt-4 small text-uppercase">Displayed Metrics</h6>
+<div class="mb-2">
+    <label class="form-label small fw-bold">Current Weather</label>
+    <div class="d-flex flex-wrap gap-2">
+        {% set cur = config.get('current_weather_display_details', []) %}
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="current_details" value="feels_like" id="cur_fl" {% if 'feels_like' in cur %}checked{% endif %}><label class="form-check-label" for="cur_fl">Feel</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="current_details" value="humidity" id="cur_hum" {% if 'humidity' in cur %}checked{% endif %}><label class="form-check-label" for="cur_hum">Hum</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="current_details" value="wind_speed" id="cur_wind" {% if 'wind_speed' in cur %}checked{% endif %}><label class="form-check-label" for="cur_wind">Wind</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="current_details" value="aqi" id="cur_aqi" {% if 'aqi' in cur %}checked{% endif %}><label class="form-check-label" for="cur_aqi">AQI</label></div>
+    </div>
+</div>
+
+<div class="mb-2">
+    <label class="form-label small fw-bold">Daily Forecast</label>
+    <div class="d-flex flex-wrap gap-2">
+        {% set daily = config.get('daily_forecast_display_details', []) %}
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="temp" id="day_temp" {% if 'temp' in daily %}checked{% endif %}><label class="form-check-label" for="day_temp">Temp</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="rain" id="day_rain" {% if 'rain' in daily %}checked{% endif %}><label class="form-check-label" for="day_rain">Rain</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="wind" id="day_wind" {% if 'wind' in daily %}checked{% endif %}><label class="form-check-label" for="day_wind">Wind</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="uvi" id="day_uvi" {% if 'uvi' in daily %}checked{% endif %}><label class="form-check-label" for="day_uvi">UV</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="aqi_pm25" id="day_aqi" {% if 'aqi_pm25' in daily %}checked{% endif %}><label class="form-check-label" for="day_aqi">AQI</label></div>
+    </div>
+</div>
