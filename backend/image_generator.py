@@ -617,11 +617,10 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
         fonts['small'] = ImageFont.load_default()
         graph_base_font_size = 10
 
-    # --- ARCHITECTURE FIX: Use injected palette or safe defaults ---
+    # --- COLOR PALETTE LOGIC ---
     if color_palette:
-        colors = color_palette
+        colors = color_palette.copy()
     else:
-        # Fallback generic colors if no driver provided
         colors = {
             'bg': (255, 255, 255),
             'text': (0, 0, 0),
@@ -630,6 +629,14 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
             'orange': (255, 140, 0),
             'grey': (100, 100, 100)
         }
+        
+    # Apply Config Overrides
+    custom_daily_colors = app_config.get('daily_forecast_colors', {})
+    if custom_daily_colors:
+        if 'text' in custom_daily_colors: colors['text'] = custom_daily_colors['text']
+        if 'blue' in custom_daily_colors: colors['blue'] = custom_daily_colors['blue']
+        if 'green' in custom_daily_colors: colors['green'] = custom_daily_colors['green']
+        if 'orange' in custom_daily_colors: colors['orange'] = custom_daily_colors['orange']
 
     draw_context.rectangle(((0, 0), (image_width, image_height)), fill=colors['bg'])
 

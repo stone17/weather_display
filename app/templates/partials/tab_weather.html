@@ -62,6 +62,47 @@
     <div class="col-6"><input type="text" class="form-control form-control-sm" id="inputLongitude" name="longitude" placeholder="Lon" value="{{ config.get('longitude', '') }}"></div>
 </div>
 
+<h6 class="text-muted border-bottom pb-1 mb-2 mt-3 small text-uppercase">Supplemental Data</h6>
+<div class="mb-3 bg-light p-2 rounded border">
+    
+    {% set ns = namespace(supp_om=none) %}
+    {% for s in config.get('supplemental_providers', []) %}
+        {% if s.provider_name == 'open-meteo' %}{% set ns.supp_om = s %}{% endif %}
+    {% endfor %}
+    {% set supp_om = ns.supp_om %}
+    
+    <div class="form-check form-switch mb-1">
+        <input class="form-check-input" type="checkbox" name="supp_om_enabled" value="true" id="chkSuppOm" {% if supp_om %}checked{% endif %}>
+        <label class="form-check-label small fw-bold" for="chkSuppOm">Open-Meteo (Backup/Fill)</label>
+    </div>
+    <div class="ms-4 mb-2">
+        {% set om_params = supp_om.parameters if supp_om else [] %}
+        <div class="d-flex flex-wrap gap-2">
+            <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="supp_om_p_uvi" value="true" {% if 'uvi' in om_params %}checked{% endif %}><label class="form-check-label">UV Index</label></div>
+            <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="supp_om_p_rain" value="true" {% if 'rain' in om_params %}checked{% endif %}><label class="form-check-label">Rain</label></div>
+        </div>
+    </div>
+
+    {% set ns = namespace(supp_aqi=none) %}
+    {% for s in config.get('supplemental_providers', []) %}
+        {% if s.provider_name == 'aqicn' or s.provider_name == 'AQICN' %}{% set ns.supp_aqi = s %}{% endif %}
+    {% endfor %}
+    {% set supp_aqi = ns.supp_aqi %}
+    
+    <div class="form-check form-switch mb-1">
+        <input class="form-check-input" type="checkbox" name="supp_aqi_enabled" value="true" id="chkSuppAqi" {% if supp_aqi %}checked{% endif %}>
+        <label class="form-check-label small fw-bold" for="chkSuppAqi">AQICN (Air Quality)</label>
+    </div>
+    <div class="ms-4">
+        {% set aqi_params = supp_aqi.parameters if supp_aqi else [] %}
+         <div class="d-flex flex-wrap gap-2">
+            <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="supp_aqi_p_aqi" value="true" {% if 'aqi' in aqi_params %}checked{% endif %}><label class="form-check-label">AQI</label></div>
+            <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="supp_aqi_p_pm25" value="true" {% if 'aqi_pm25_avg' in aqi_params %}checked{% endif %}><label class="form-check-label">PM2.5</label></div>
+        </div>
+        <div class="form-text x-small mt-1">Requires AQICN Token above.</div>
+    </div>
+</div>
+
 <h6 class="text-muted border-bottom pb-1 mb-2 mt-3 small text-uppercase">Preferences</h6>
 <div class="row g-2 mb-3">
     <div class="col-6">
@@ -98,5 +139,25 @@
         <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="wind" id="day_wind" {% if 'wind' in daily %}checked{% endif %}><label class="form-check-label" for="day_wind">Wind</label></div>
         <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="uvi" id="day_uvi" {% if 'uvi' in daily %}checked{% endif %}><label class="form-check-label" for="day_uvi">UV</label></div>
         <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="aqi_pm25" id="day_aqi" {% if 'aqi_pm25' in daily %}checked{% endif %}><label class="form-check-label" for="day_aqi">AQI</label></div>
+    </div>
+</div>
+
+<h6 class="text-muted border-bottom pb-1 mb-2 mt-4 small text-uppercase">Daily Forecast Colors</h6>
+<div class="row g-2">
+    <div class="col-6 col-md-3">
+        <label class="form-label small mb-0">Text</label>
+        <input type="color" class="form-control form-control-sm p-1" name="daily_color_text" value="{{ config.get('daily_forecast_colors', {}).get('text', '#000000') }}">
+    </div>
+    <div class="col-6 col-md-3">
+        <label class="form-label small mb-0">Rain</label>
+        <input type="color" class="form-control form-control-sm p-1" name="daily_color_rain" value="{{ config.get('daily_forecast_colors', {}).get('blue', '#0000C8') }}">
+    </div>
+    <div class="col-6 col-md-3">
+        <label class="form-label small mb-0">Wind</label>
+        <input type="color" class="form-control form-control-sm p-1" name="daily_color_wind" value="{{ config.get('daily_forecast_colors', {}).get('green', '#00B400') }}">
+    </div>
+    <div class="col-6 col-md-3">
+        <label class="form-label small mb-0">UV</label>
+        <input type="color" class="form-control form-control-sm p-1" name="daily_color_uvi" value="{{ config.get('daily_forecast_colors', {}).get('orange', '#FF8C00') }}">
     </div>
 </div>
