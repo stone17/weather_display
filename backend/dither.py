@@ -5,10 +5,10 @@ from typing import List, Tuple, Union
 
 # --- HARDWARE PALETTE DEFINITIONS (Source of Truth) ---
 PALETTE_ACEP_7_RGB = [
-    (25, 30, 33),    # 0: Black (#191E21)
-    (241, 241, 241), # 1: White (#F1F1F1)
-    (83, 164, 40),   # 2: Green (#53A428)
-    (49, 49, 143),   # 3: Blue (#31318F)
+    (0, 0, 0),       # Black
+    (255, 255, 255), # White
+    (0, 255, 0),     # Green
+    (0, 0, 255),     # Blue
     (210, 14, 19),   # 4: Red (#D20E13)
     (243, 207, 17),  # 5: Yellow (#F3CF11)
     (184, 94, 28)    # 6: Orange (#B85E1C)
