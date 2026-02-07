@@ -359,7 +359,7 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             for start, end in intervals:
                 ax_primary_left.axvspan(start, end, color=dn_cfg.get('color', 'lightgrey'), alpha=dn_cfg.get('alpha', 0.3), zorder=0.5, lw=0)
 
-    # --- RESTORED COMPLEX LEGEND/PEAK LOGIC ---
+    # --- Legends ---
     legend_main_cfg = graph_plot_config.get('legend', {})
     peak_display_cfg = legend_main_cfg.get('peak_value_display', {})
     standard_legend_cfg = legend_main_cfg.get('standard_legend', {})
@@ -391,7 +391,7 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             )
 
         h_align_fig_default = peak_display_cfg.get('fig_horizontal_alignment', 'center') 
-        h_align_axis_default = peak_display_cfg.get('horizontal_alignment', 'right') # Use generic horizontal_alignment
+        h_align_axis_default = peak_display_cfg.get('horizontal_alignment', 'right') 
 
         if location == "above_graph":
             reserved_top = peak_display_cfg.get('fig_reserved_top_space', 0.15)
@@ -586,7 +586,7 @@ def create_daily_forecast_display(weather_data_daily, temperature_unit_pref, pro
             current_detail_y_pos += detail_line_height
 
 
-def generate_weather_image(weather_data, output_path, app_config, project_root_path, icon_cache_path=None):
+def generate_weather_image(weather_data, output_path, app_config, project_root_path, icon_cache_path=None, color_palette=None):
     global image_canvas, draw_context
     
     if not weather_data or not weather_data.has_sufficient_data():
@@ -618,7 +618,19 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
         fonts['small'] = ImageFont.load_default()
         graph_base_font_size = 10
 
-    colors = {'bg': (255, 255, 255), 'text': (50, 50, 50), 'blue': (0, 0, 200), 'green': (0, 180, 0), 'orange': (255, 140, 0), 'grey': (100, 100, 100)}
+    if color_palette:
+        colors = color_palette
+    else:
+        # Fallback generic colors if no driver provided
+        colors = {
+            'bg': (255, 255, 255),
+            'text': (0, 0, 0),
+            'blue': (0, 0, 200),
+            'green': (0, 180, 0),
+            'orange': (255, 140, 0),
+            'grey': (100, 100, 100)
+        }
+
     draw_context.rectangle(((0, 0), (image_width, image_height)), fill=colors['bg'])
 
     # --- Current Weather ---
