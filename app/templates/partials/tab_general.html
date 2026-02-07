@@ -20,8 +20,18 @@
     <div class="col-6">
         <label class="form-label">Dithering</label>
         <select class="form-select form-select-sm" name="dithering_method">
-            <option value="floyd_steinberg" {% if config.get('dithering_method') == 'floyd_steinberg' %}selected{% endif %}>Floyd-Steinberg</option>
             <option value="none" {% if config.get('dithering_method') == 'none' %}selected{% endif %}>None (Nearest)</option>
+            <option value="floyd_steinberg" {% if config.get('dithering_method') == 'floyd_steinberg' %}selected{% endif %}>Floyd-Steinberg (Fast)</option>
+            <optgroup label="Ordered (Fast)">
+                <option value="bayer_2" {% if config.get('dithering_method') == 'bayer_2' %}selected{% endif %}>Bayer 2x2</option>
+                <option value="bayer_4" {% if config.get('dithering_method') == 'bayer_4' %}selected{% endif %}>Bayer 4x4</option>
+            </optgroup>
+            <optgroup label="Error Diffusion (High Quality)">
+                <option value="stucki" {% if config.get('dithering_method') == 'stucki' %}selected{% endif %}>Stucki</option>
+                <option value="jarvis" {% if config.get('dithering_method') == 'jarvis' %}selected{% endif %}>Jarvis, Judice & Ninke</option>
+                <option value="burkes" {% if config.get('dithering_method') == 'burkes' %}selected{% endif %}>Burkes</option>
+                <option value="sierra3" {% if config.get('dithering_method') == 'sierra3' %}selected{% endif %}>Sierra 3</option>
+            </optgroup>
         </select>
     </div>
     <div class="col-6">

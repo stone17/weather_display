@@ -51,12 +51,24 @@
                 </div>
                 
                 <div class="mt-4 pt-3 border-top border-secondary d-flex justify-content-center align-items-center gap-3">
-                    <span class="text-white-50 small">Quick Dither Test:</span>
-                    <select id="liveDitherMethod" class="form-select form-select-sm w-auto bg-dark text-white border-secondary">
-                        <option value="floyd_steinberg">Floyd-Steinberg</option>
-                        <option value="none">None (Nearest)</option>
-                    </select>
-                    <button type="button" onclick="updateDither()" class="btn btn-sm btn-info text-white fw-bold">Apply to Preview</button>
+                    <span class="text-muted small">Quick Dither Test:</span>
+                    <div class="input-group input-group-sm w-auto">
+                        <select id="liveDitherMethod" class="form-select bg-light border-secondary">
+                            <option value="none">None (Nearest)</option>
+                            <option value="floyd_steinberg">Floyd-Steinberg (Fast)</option>
+                            <optgroup label="Ordered (Fast)">
+                                <option value="bayer_2">Bayer 2x2</option>
+                                <option value="bayer_4">Bayer 4x4</option>
+                            </optgroup>
+                            <optgroup label="Error Diffusion (High Quality)">
+                                <option value="stucki">Stucki</option>
+                                <option value="jarvis">Jarvis, Judice & Ninke</option>
+                                <option value="burkes">Burkes</option>
+                                <option value="sierra3">Sierra 3</option>
+                            </optgroup>
+                        </select>
+                        <button type="button" onclick="updateDither()" class="btn btn-primary fw-bold">Apply</button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -179,15 +191,25 @@
         const method = document.getElementById('liveDitherMethod').value;
         const formData = new FormData();
         formData.append('method', method);
+        
+        const btn = document.querySelector('button[onclick="updateDither()"]');
+        const originalText = btn.innerText;
+        btn.innerText = "Processing..."; btn.disabled = true;
+
         try {
-            const btn = document.querySelector('button[onclick="updateDither()"]');
-            const originalText = btn.innerText;
-            btn.innerText = "Processing..."; btn.disabled = true;
             const res = await (await fetch('/apply_dither', { method: 'POST', body: formData })).json();
-            if (res.success) document.getElementById('imgDithered').src = "/image/dithered?t=" + Date.now();
-            else alert("Error: " + res.error);
+            if (res.success) {
+                // Force image refresh with timestamp
+                const img = document.getElementById('imgDithered');
+                img.src = "/image/dithered?t=" + new Date().getTime();
+            } else {
+                alert("Error: " + res.error);
+            }
+        } catch (e) { 
+            alert("Network Error: " + e.message); 
+        } finally {
             btn.innerText = originalText; btn.disabled = false;
-        } catch (e) { alert("Network Error"); }
+        }
     }
 
     const modal = new bootstrap.Modal(document.getElementById('citySearchModal'));
