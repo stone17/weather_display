@@ -20,8 +20,8 @@ PALETTE_ACEP_7_RGB = [
     (0, 255, 0),     # Green
     (0, 0, 255),     # Blue
     (255, 0, 0),     # Red
-    (255, 255, 0),   # Yellow
-    (255, 128, 0)    # Orange
+    (255, 255, 10),   # Yellow
+    (240, 140, 10)    # Orange
 ]
 
 class DitherMethod(Enum):

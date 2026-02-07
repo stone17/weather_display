@@ -1,5 +1,6 @@
 import os
 import logging
+import struct
 from PIL import Image
 
 from display_drivers import SevenColorDriver, SpectraE6Driver
@@ -102,10 +103,12 @@ class DisplayOrchestrator:
         save_path = ""
         if fmt == "bmp8":
             save_path = os.path.join(cache_dir, "latest_dithered.bmp")
-            img.save(save_path)
+            # USE THE NEW FUNCTION HERE
+            self._save_bmp_uncompressed(img, save_path) 
+            
         elif fmt == "bmp24":
             save_path = os.path.join(cache_dir, "latest_dithered.bmp")
-            img.convert("RGB").save(save_path)
+            img.convert("RGB").save(save_path) # PIL 24-bit is usually fine, but 8-bit is safer for size
         else:
             save_path = os.path.join(cache_dir, "latest_dithered.png")
             img.save(save_path)
@@ -122,3 +125,69 @@ class DisplayOrchestrator:
                 upload.upload_processed_data(raw_data, w, h, server_ip, upload.DEFAULT_UPLOAD_URL)
             except Exception as e:
                 logger.error(f"Push failed: {e}")
+
+    def _save_bmp_uncompressed(self, image, filepath):
+        """
+        Saves a PIL P-mode image as an uncompressed 8-bit BMP.
+        Fixed format string to match standard BITMAPINFOHEADER (40 bytes).
+        """
+        width, height = image.size
+        
+        # Row padding to 4-byte boundaries
+        row_stride = (width + 3) & ~3
+        padding = row_stride - width
+        
+        # 1. Header
+        # File Header (14) + DIB Header (40) + Palette (1024) = 1078 offset
+        file_size = 54 + 1024 + (row_stride * height)
+        offset = 54 + 1024
+        
+        # BMP Header: Magic(2), FileSize(4), Rsv(2), Rsv(2), Offset(4)
+        bmp_header = struct.pack('<2sIHHI', b'BM', file_size, 0, 0, offset)
+        
+        # DIB Header (BITMAPINFOHEADER) - 40 bytes, 11 fields
+        # I=4byte-uint, i=4byte-int, H=2byte-uint
+        dib_header = struct.pack('<IiiHHIIIIII', 
+            40,      # biSize
+            width,   # biWidth
+            height,  # biHeight
+            1,       # biPlanes
+            8,       # biBitCount (8 bits per pixel)
+            0,       # biCompression (BI_RGB = 0)
+            0,       # biSizeImage (0 is valid for BI_RGB)
+            0,       # biXPelsPerMeter
+            0,       # biYPelsPerMeter
+            0,       # biClrUsed
+            0        # biClrImportant
+        )
+        
+        # 2. Extract Palette
+        # PIL returns flat [r,g,b, r,g,b...]
+        raw_palette = image.getpalette() 
+        if not raw_palette: raw_palette = [0]*768 
+
+        palette_data = bytearray()
+        for i in range(256):
+            if i * 3 < len(raw_palette):
+                r = raw_palette[i*3]
+                g = raw_palette[i*3+1]
+                b = raw_palette[i*3+2]
+                palette_data.extend([b, g, r, 0]) # BGR + Reserved (Alpha)
+            else:
+                palette_data.extend([0, 0, 0, 0])
+
+        # 3. Pixel Data (Bottom-Up)
+        pixel_data = bytearray()
+        pixels = list(image.getdata())
+        
+        for y in range(height - 1, -1, -1):
+            row_start = y * width
+            row = pixels[row_start : row_start + width]
+            pixel_data.extend(row)
+            pixel_data.extend(b'\x00' * padding)
+            
+        with open(filepath, 'wb') as f:
+            f.write(bmp_header)
+            f.write(dib_header)
+            f.write(palette_data)
+            f.write(pixel_data)
