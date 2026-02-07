@@ -57,7 +57,7 @@ class DisplayOrchestrator:
             # CRITICAL FIX: Boost saturation for photos
             # 2.0 = Double saturation. 
             # This makes "pale blue" sky look "deep blue" so the ditherer detects it.
-            saturation = 2.0 
+            saturation = 2.5 
             
         else:
             logger.info("Delegating to: WeatherService")
