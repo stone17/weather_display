@@ -46,42 +46,47 @@ class DisplayOrchestrator:
         
         # 1. GENERATE CONTENT (RGB)
         img_rgb = None
+        saturation = 1.0  # Default: No boost
         
         if mode == "photo":
             logger.info("Delegating to: PhotoFrameGenerator")
             sort_mode = self.config.get("photo_sort_order", "random")
             generator = PhotoFrameGenerator(self.root_dir)
-            # Pass specific_filename here
             img_rgb = generator.generate_image(width, height, sort_mode=sort_mode, specific_filename=specific_photo)
+            
+            # CRITICAL FIX: Boost saturation for photos
+            # 2.0 = Double saturation. 
+            # This makes "pale blue" sky look "deep blue" so the ditherer detects it.
+            saturation = 2.0 
             
         else:
             logger.info("Delegating to: WeatherService")
             colors = self.driver.get_rendering_colors()
             weather_svc = WeatherService(self.config, self.root_dir)
             img_rgb = await weather_svc.generate_image(width, height, colors)
+            # Weather graphs are already pure colors, less boost needed.
+            saturation = 1.5
 
         if not img_rgb:
-            logger.error("Content generation failed (returned None).")
+            logger.error("Content generation failed.")
             return False, "Content generation failed"
 
-        # 2. SAVE SOURCE (For Web Preview)
+        # 2. SAVE SOURCE (Preview)
         cache_dir = os.path.join(self.root_dir, "cache")
         if not os.path.exists(cache_dir): os.makedirs(cache_dir)
-        
-        source_path = os.path.join(cache_dir, "latest_source.png")
         try:
-            img_rgb.save(source_path)
-            logger.info(f"Saved source image to {source_path}")
-        except Exception as e:
-            logger.error(f"Failed to save source image: {e}")
+            img_rgb.save(os.path.join(cache_dir, "latest_source.png"))
+        except: pass
 
         # 3. DITHERING
         try:
             dither_method = self.config.get("dithering_method", "floyd_steinberg")
             ditherer = DitherProcessor()
-            img_dithered = ditherer.process(img_rgb, dither_method)
             
-            # Save Dithered Result
+            # PASS THE SATURATION ARGUMENT HERE
+            img_dithered = ditherer.process(img_rgb, dither_method, saturation_boost=saturation)
+            
+            # Save Dithered Result (Using the fixed uncompressed saver)
             self._save_dithered_file(img_dithered, cache_dir)
             
         except Exception as e:
