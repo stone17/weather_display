@@ -7,10 +7,10 @@ import shutil
 import aiohttp
 from datetime import datetime
 from contextlib import asynccontextmanager
-from typing import Optional
+from typing import Optional, List
 from io import BytesIO
 
-from fastapi import FastAPI, Request, Form
+from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 import paho.mqtt.client as mqtt_client
@@ -20,20 +20,23 @@ from PIL import Image
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(APP_DIR)
 BACKEND_DIR = os.path.join(PROJECT_ROOT, "backend")
+PHOTOS_DIR = os.path.join(PROJECT_ROOT, "photos")
 
-# Add backend to sys.path
+# Ensure Photos Dir
+if not os.path.exists(PHOTOS_DIR):
+    os.makedirs(PHOTOS_DIR)
+
 import sys
 if BACKEND_DIR not in sys.path:
     sys.path.append(BACKEND_DIR)
 
-from create_weather_info import generate_weather
+from display_manager import DisplayOrchestrator
 from dither import DitherProcessor
 
 # --- CONFIG & LOGGING ---
 CONFIG_FILE = os.getenv("CONFIG_PATH", os.path.join(PROJECT_ROOT, "config", "config.yaml"))
 CACHE_DIR = os.path.join(PROJECT_ROOT, "cache")
 IMG_SOURCE_PATH = os.path.join(CACHE_DIR, "latest_source.png")
-IMG_DITHERED_PATH = os.path.join(CACHE_DIR, "latest_dithered.png")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("WeatherDocker")
@@ -89,7 +92,6 @@ cfg = ConfigManager(CONFIG_FILE)
 
 # --- SCHEDULER ---
 class UpdateScheduler:
-    """Manages the periodic background update task."""
     def __init__(self):
         self.task = None
 
@@ -116,17 +118,15 @@ class UpdateScheduler:
     async def _loop(self, interval):
         try:
             while True:
-                # Wait for the interval duration
                 await asyncio.sleep(interval * 60)
-                logger.info("Scheduler: Triggering scheduled weather update...")
-                # We use the existing async trigger
+                logger.info("Scheduler: Triggering scheduled update...")
                 await trigger_weather_update()
         except asyncio.CancelledError:
-            logger.info("Scheduler: Task stopped.")
+            pass
 
 scheduler = UpdateScheduler()
 
-# --- MQTT HANDLER ---
+# --- MQTT HANDLER (Updated Logic) ---
 class MqttHandler:
     def __init__(self):
         self.client = mqtt_client.Client()
@@ -135,13 +135,19 @@ class MqttHandler:
         self.connected = False
 
     def start(self):
+        # CHECK ENABLE FLAG
+        if not cfg.data.get('enable_mqtt', False):
+            logger.info("MQTT is disabled in settings.")
+            return
+
         broker = cfg.data.get('mqtt_broker')
         if not broker: return
+        
         try:
             user = cfg.data.get('mqtt_user')
             pwd = cfg.data.get('mqtt_password')
-            if user and pwd: 
-                self.client.username_pw_set(user, pwd)
+            if user and pwd: self.client.username_pw_set(user, pwd)
+            
             port = int(cfg.data.get('mqtt_port', 1883))
             self.client.connect(broker, port, 60)
             self.client.loop_start()
@@ -151,8 +157,7 @@ class MqttHandler:
 
     def stop(self):
         try:
-            self.client.loop_stop()
-            self.client.disconnect()
+            self.client.loop_stop(); self.client.disconnect()
             self.connected = False
         except Exception: pass
 
@@ -161,8 +166,7 @@ class MqttHandler:
             self.connected = True
             client.subscribe("weather_display/update")
             self.publish_discovery(client)
-        else: 
-            self.connected = False
+        else: self.connected = False
 
     def publish_discovery(self, client):
         topic = "homeassistant/button/weather_display/update/config"
@@ -171,11 +175,10 @@ class MqttHandler:
             "unique_id": "weather_display_refresh_btn",
             "command_topic": "weather_display/update",
             "payload_press": "TRIGGER",
-            "icon": "mdi:weather-cloudy-clock",
+            "icon": "mdi:refresh",
             "device": {"identifiers": ["weather_display_docker"], "name": "Weather Display", "manufacturer": "Docker"}
         }
-        try:
-            client.publish(topic, json.dumps(payload), retain=True)
+        try: client.publish(topic, json.dumps(payload), retain=True)
         except Exception: pass
 
     def on_message(self, client, userdata, msg):
@@ -195,10 +198,8 @@ async def search_cities_interactive(city_name):
                 if resp.status == 200:
                     data = await resp.json()
                     return data.get("results", []), None 
-                else:
-                    return [], f"API Error {resp.status}"
-        except Exception as e:
-            return [], f"Error: {str(e)}"
+                else: return [], f"API Error {resp.status}"
+        except Exception as e: return [], f"Error: {str(e)}"
 
 async def get_lat_lon_from_city(city_name):
     results, error = await search_cities_interactive(city_name)
@@ -210,35 +211,33 @@ async def get_lat_lon_from_city(city_name):
 # --- BACKGROUND TASK ---
 async def trigger_weather_update():
     global flash_message
-    logger.info("Starting weather generation...")
-    success, msg = await generate_weather(CONFIG_FILE)
+    logger.info("Triggering Display Orchestrator...")
+    
+    # Initialize the Orchestrator with current config
+    orchestrator = DisplayOrchestrator(cfg.data, PROJECT_ROOT)
+    
+    success, msg = await orchestrator.update_display()
+    
     if success: 
-        # Only set flash message if triggered manually (optional refinement), 
-        # but here we set it always so manual refreshers see result.
-        flash_message = {"type": "success", "text": "Weather updated successfully."}
+        flash_message = {"type": "success", "text": "Display updated successfully."}
     else: 
-        flash_message = {"type": "danger", "text": f"Generation Failed: {msg}"}
+        logger.error(f"Update Failed: {msg}")
+        flash_message = {"type": "danger", "text": f"Update Failed: {msg}"}
 
 # --- LIFECYCLE ---
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global loop
     loop = asyncio.get_running_loop()
-    
-    # Start Services
     mqtt_handler.start()
-    scheduler.restart() # Initialize Scheduler based on loaded config
-    
+    scheduler.restart()
     yield
-    
-    # Stop Services
     scheduler.stop()
     mqtt_handler.stop()
 
 app = FastAPI(lifespan=lifespan)
 templates = Jinja2Templates(directory=os.path.join(APP_DIR, "templates"))
 
-# --- HELPER: Get Current Dithered Path ---
 def get_current_dithered_path():
     bmp_path = os.path.join(CACHE_DIR, "latest_dithered.bmp")
     if os.path.exists(bmp_path): return bmp_path
@@ -260,22 +259,26 @@ async def home(request: Request):
     
     msg = flash_message
     flash_message = None
+    
+    # Get photo list
+    photos = []
+    if os.path.exists(PHOTOS_DIR):
+        photos = [f for f in os.listdir(PHOTOS_DIR) if f.lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.webp'))]
 
     return templates.TemplateResponse("index.html", {
         "request": request, "config": cfg.data, 
         "providers": ["smhi", "owm", "openmeteo", "meteomatics", "google", "aqicn"], 
-        "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg
+        "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg,
+        "photos": photos
     })
 
 @app.get("/image")
 async def get_image():
-    """Serves the final dithered image (BMP or PNG) for the ESP."""
     path = get_current_dithered_path()
     if path:
         return FileResponse(path, headers={
             "Cache-Control": "no-cache, no-store, must-revalidate",
-            "Pragma": "no-cache",
-            "Expires": "0"
+            "Pragma": "no-cache", "Expires": "0"
         })
     return HTMLResponse("No image generated.", status_code=404)
 
@@ -288,10 +291,40 @@ async def get_source_image():
 @app.get("/image/dithered")
 async def get_dithered_image():
     path = get_current_dithered_path()
-    if path:
-        return FileResponse(path, headers={"Cache-Control": "no-cache"})
+    if path: return FileResponse(path, headers={"Cache-Control": "no-cache"})
     return HTMLResponse("No dithered image", status_code=404)
 
+# --- PHOTO MANAGEMENT ROUTES ---
+@app.post("/upload_photos")
+async def upload_photos(files: List[UploadFile] = File(...)):
+    global flash_message
+    saved_count = 0
+    for file in files:
+        if file.filename:
+            file_path = os.path.join(PHOTOS_DIR, file.filename)
+            try:
+                with open(file_path, "wb") as buffer:
+                    shutil.copyfileobj(file.file, buffer)
+                saved_count += 1
+            except Exception as e:
+                logger.error(f"Error saving {file.filename}: {e}")
+    
+    flash_message = {"type": "success", "text": f"Uploaded {saved_count} photos."}
+    return RedirectResponse("/", status_code=303)
+
+@app.post("/delete_photo")
+async def delete_photo(filename: str = Form(...)):
+    global flash_message
+    path = os.path.join(PHOTOS_DIR, filename)
+    # Security check: ensure we stay in photos dir
+    if os.path.commonpath([path, PHOTOS_DIR]) == PHOTOS_DIR and os.path.exists(path):
+        os.remove(path)
+        flash_message = {"type": "info", "text": f"Deleted {filename}."}
+    else:
+        flash_message = {"type": "danger", "text": "File not found or invalid path."}
+    return RedirectResponse("/", status_code=303)
+
+# --- CONFIG ROUTES ---
 @app.post("/lookup_city")
 async def lookup_city(city_name: str = Form(...)):
     results, error = await search_cities_interactive(city_name)
@@ -300,41 +333,40 @@ async def lookup_city(city_name: str = Form(...)):
 
 @app.post("/apply_dither")
 async def apply_dither(method: str = Form(...)):
-    if not os.path.exists(IMG_SOURCE_PATH):
-        return JSONResponse({"success": False, "error": "No source image found."})
+    if not os.path.exists(IMG_SOURCE_PATH): return JSONResponse({"success": False, "error": "No source"})
     try:
         img = Image.open(IMG_SOURCE_PATH).convert("RGB")
         ditherer = DitherProcessor()
         result = ditherer.process(img, method)
         
         fmt = cfg.data.get("output_format", "png")
-        
-        # Cleanup
         for f in ["latest_dithered.png", "latest_dithered.bmp"]:
             p = os.path.join(CACHE_DIR, f)
             if os.path.exists(p): os.remove(p)
 
-        if fmt == "bmp8":
-            result.save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
-        elif fmt == "bmp24":
-            result.convert("RGB").save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
-        else:
-            result.save(os.path.join(CACHE_DIR, "latest_dithered.png"))
+        if fmt == "bmp8": result.save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
+        elif fmt == "bmp24": result.convert("RGB").save(os.path.join(CACHE_DIR, "latest_dithered.bmp"))
+        else: result.save(os.path.join(CACHE_DIR, "latest_dithered.png"))
 
         cfg.save_local({'dithering_method': method})
         return JSONResponse({"success": True})
-    except Exception as e:
-        return JSONResponse({"success": False, "error": str(e)})
+    except Exception as e: return JSONResponse({"success": False, "error": str(e)})
 
 @app.post("/update_settings")
 async def update_settings(
+    # Connectivity Toggles (Checkboxes send "on" or are missing)
+    enable_mqtt: bool = Form(False),
+    enable_server_push: bool = Form(False),
+    
     mqtt_broker: str = Form(""), mqtt_port: int = Form(1883),
     mqtt_user: str = Form(""), mqtt_password: str = Form(""),
     server_ip: str = Form(""), weather_provider: str = Form(...),
     city_name: str = Form(""), lat: str = Form(""), lon: str = Form(""),
     hardware_profile: str = Form(...), dithering_method: str = Form("floyd_steinberg"),
     output_format: str = Form("png"),
-    update_interval_minutes: int = Form(0) # New Parameter
+    update_interval_minutes: int = Form(0),
+    display_mode: str = Form("weather"),
+    photo_sort_order: str = Form("random") # New Parameter
 ):
     global flash_message
     width, height = 600, 448
@@ -342,13 +374,17 @@ async def update_settings(
         width, height = 800, 480
 
     updates = {
+        'enable_mqtt': enable_mqtt,
+        'enable_server_push': enable_server_push,
         'mqtt_broker': mqtt_broker, 'mqtt_port': mqtt_port,
         'mqtt_user': mqtt_user, 'mqtt_password': mqtt_password,
         'server_ip': server_ip, 'weather_provider': weather_provider,
         'hardware_profile': hardware_profile,
         'dithering_method': dithering_method,
         'output_format': output_format,
-        'update_interval_minutes': update_interval_minutes, # Saved to config
+        'update_interval_minutes': update_interval_minutes,
+        'display_mode': display_mode,
+        'photo_sort_order': photo_sort_order, # Saved
         'display_width': width, 'display_height': height,
         'lat': float(lat) if lat else None,
         'lon': float(lon) if lon else None,
@@ -366,9 +402,8 @@ async def update_settings(
 
     cfg.save_local(updates)
     
-    # Restart Services
     mqtt_handler.stop(); mqtt_handler.start()
-    scheduler.restart() # Applies the new interval immediately
+    scheduler.restart()
     
     flash_message = {"type": "info", "text": status_text}
     return RedirectResponse("/", status_code=303)
