@@ -1,17 +1,30 @@
 <h6 class="small text-uppercase text-muted">Upload Photos</h6>
 
 <div class="mb-3">
-    <div class="input-group input-group-sm">
-        <input type="file" class="form-control" id="photoInput" multiple accept="image/*">
-        <button class="btn btn-outline-secondary" type="button" onclick="uploadPhotos()">Upload</button>
-    </div>
+    <form action="/upload_photos" method="post" enctype="multipart/form-data">
+        <input type="file" name="files" class="form-control form-control-sm" id="photoInput" multiple accept="image/*" onchange="this.form.submit()">
+        <div class="form-text mt-1">Selected files will upload immediately.</div>
+    </form>
 </div>
 
 <div class="list-group list-group-flush border rounded" style="max-height: 200px; overflow-y: auto;">
     {% for photo in photos %}
     <div class="list-group-item d-flex justify-content-between align-items-center py-1 photo-list-item">
-        <span class="text-truncate" style="max-width: 200px;">{{ photo }}</span>
-        <button type="button" class="btn btn-link text-danger p-0 text-decoration-none" onclick="deletePhoto('{{ photo }}')">×</button>
+        <span class="text-truncate" style="max-width: 150px;">{{ photo }}</span>
+        
+        <div class="d-flex align-items-center gap-2">
+            <form action="/display_photo" method="post" class="d-inline m-0">
+                <input type="hidden" name="filename" value="{{ photo }}">
+                <button type="submit" class="btn btn-sm btn-outline-primary py-0 px-2" title="Display Now">
+                    <i class="bi bi-display"></i> Show
+                </button>
+            </form>
+
+            <form action="/delete_photo" method="post" class="d-inline m-0">
+                <input type="hidden" name="filename" value="{{ photo }}">
+                <button type="submit" class="btn btn-link text-danger p-0 text-decoration-none">×</button>
+            </form>
+        </div>
     </div>
     {% else %}
     <div class="list-group-item text-muted text-center py-2 small">No photos uploaded</div>

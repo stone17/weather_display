@@ -274,6 +274,21 @@ async def delete_photo(filename: str = Form(...)):
         flash_message = {"type": "danger", "text": "File not found or invalid path."}
     return RedirectResponse("/", status_code=303)
 
+@app.post("/display_photo")
+async def display_specific_photo(filename: str = Form(...)):
+    global flash_message
+    logger.info(f"Manual trigger: Displaying specific photo {filename}")
+    
+    orchestrator = DisplayOrchestrator(cfg.data, PROJECT_ROOT)
+    success, msg = await orchestrator.update_display(specific_photo=filename)
+    
+    if success:
+        flash_message = {"type": "success", "text": f"Displaying {filename}"}
+    else:
+        flash_message = {"type": "danger", "text": f"Error: {msg}"}
+        
+    return RedirectResponse("/", status_code=303)
+
 @app.post("/lookup_city")
 async def lookup_city(city_name: str = Form(...)):
     results, error = await search_cities_interactive(city_name)

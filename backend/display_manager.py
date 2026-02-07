@@ -33,10 +33,13 @@ class DisplayOrchestrator:
             h = self.config.get("display_height", 448)
             return SevenColorDriver(w, h, dither_method=dither)
 
-    async def update_display(self):
+    async def update_display(self, specific_photo=None):
         logger.info("Orchestrator: Starting update cycle...")
         
         mode = self.config.get("display_mode", "weather")
+        if specific_photo:
+            mode = "photo"
+
         width = self.driver.width
         height = self.driver.height
         
@@ -47,7 +50,8 @@ class DisplayOrchestrator:
             logger.info("Delegating to: PhotoFrameGenerator")
             sort_mode = self.config.get("photo_sort_order", "random")
             generator = PhotoFrameGenerator(self.root_dir)
-            img_rgb = generator.generate_image(width, height, sort_mode=sort_mode)
+            # Pass specific_filename here
+            img_rgb = generator.generate_image(width, height, sort_mode=sort_mode, specific_filename=specific_photo)
             
         else:
             logger.info("Delegating to: WeatherService")
@@ -91,7 +95,6 @@ class DisplayOrchestrator:
 
     def _save_dithered_file(self, img, cache_dir):
         fmt = self.config.get("output_format", "png")
-        # Cleanup old files
         for f in ["latest_dithered.png", "latest_dithered.bmp"]:
             p = os.path.join(cache_dir, f)
             if os.path.exists(p): os.remove(p)
