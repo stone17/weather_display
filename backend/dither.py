@@ -20,13 +20,14 @@ PALETTE_ACEP_7_RGB = [
     (0, 255, 0),     # Green
     (0, 0, 255),     # Blue
     (255, 0, 0),     # Red
-    (255, 255, 10),   # Yellow
-    (240, 140, 10)    # Orange
+    (255, 255, 10),  # Yellow
+    (240, 140, 10)   # Orange
 ]
 
 class DitherMethod(Enum):
     NONE = "none"
-    FLOYD_STEINBERG = "floyd_steinberg" 
+    FLOYD_STEINBERG = "floyd_steinberg"          # Standard PIL (Euclidean)
+    FLOYD_STEINBERG_REDMEAN = "floyd_steinberg_redmean" # Custom (Redmean Weighted)
     BAYER_2 = "bayer_2"                 
     BAYER_4 = "bayer_4"                 
     STUCKI = "stucki"                   
@@ -135,6 +136,91 @@ class DitherProcessor:
         result.putpalette(self._palette_image.getpalette())
         return result
 
+    def _floyd_steinberg_redmean(self, img: Image.Image) -> Image.Image:
+        """
+        Optimized Redmean Floyd-Steinberg implementation.
+        Inlines math to avoid function call overhead for speed.
+        """
+        pixels = np.array(img, dtype=np.float32)
+        h, w, _ = pixels.shape
+        indices = np.zeros((h, w), dtype=np.uint8)
+        
+        # Cache palette for speed
+        pal = self._palette_np
+        n_colors = len(pal)
+        
+        # Pre-extract channels
+        pal_r = pal[:, 0]
+        pal_g = pal[:, 1]
+        pal_b = pal[:, 2]
+
+        for y in range(h):
+            for x in range(w):
+                old_r, old_g, old_b = pixels[y, x]
+                
+                # --- INLINED REDMEAN DISTANCE ---
+                best_idx = 0
+                min_dist = 1e9
+                
+                for i in range(n_colors):
+                    # Redmean Mean Level
+                    rmean = (old_r + pal_r[i]) * 0.5
+                    
+                    dr = old_r - pal_r[i]
+                    dg = old_g - pal_g[i]
+                    db = old_b - pal_b[i]
+                    
+                    # Weights: 
+                    # Red: 2 + rmean/256
+                    # Green: 4.0
+                    # Blue: 2 + (255-rmean)/256
+                    
+                    wr = 2.0 + (rmean * 0.00390625)
+                    wb = 2.0 + ((255.0 - rmean) * 0.00390625)
+                    
+                    dist = wr * (dr*dr) + 4.0 * (dg*dg) + wb * (db*db)
+                    
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_idx = i
+                # --------------------------------
+
+                indices[y, x] = best_idx
+                new_r, new_g, new_b = pal[best_idx]
+                
+                err_r = old_r - new_r
+                err_g = old_g - new_g
+                err_b = old_b - new_b
+
+                # Distribute Error (Floyd-Steinberg coefficients)
+                # Right (7/16)
+                if x + 1 < w:
+                    pixels[y, x+1, 0] += err_r * 0.4375
+                    pixels[y, x+1, 1] += err_g * 0.4375
+                    pixels[y, x+1, 2] += err_b * 0.4375
+
+                if y + 1 < h:
+                    # Below Left (3/16)
+                    if x - 1 >= 0:
+                        pixels[y+1, x-1, 0] += err_r * 0.1875
+                        pixels[y+1, x-1, 1] += err_g * 0.1875
+                        pixels[y+1, x-1, 2] += err_b * 0.1875
+                    
+                    # Below (5/16)
+                    pixels[y+1, x, 0] += err_r * 0.3125
+                    pixels[y+1, x, 1] += err_g * 0.3125
+                    pixels[y+1, x, 2] += err_b * 0.3125
+                    
+                    # Below Right (1/16)
+                    if x + 1 < w:
+                        pixels[y+1, x+1, 0] += err_r * 0.0625
+                        pixels[y+1, x+1, 1] += err_g * 0.0625
+                        pixels[y+1, x+1, 2] += err_b * 0.0625
+
+        out_img = Image.fromarray(indices, mode='P')
+        out_img.putpalette(self._palette_image.getpalette())
+        return out_img
+
     def process(self, img: Image.Image, method: Union[DitherMethod, str] = DitherMethod.FLOYD_STEINBERG, saturation_boost: float = 1.0) -> Image.Image:
         """
         Quantizes the image to the 7-color palette using the specified method.
@@ -150,14 +236,19 @@ class DitherProcessor:
         if img.mode != "RGB":
             img = img.convert("RGB")
 
-        # 1. Boost Saturation (Optional but recommended for E-Ink)
+        # 1. Boost Saturation
         if saturation_boost != 1.0:
             enhancer = ImageEnhance.Color(img)
             img = enhancer.enhance(saturation_boost)
 
         # 2. Select Method
         if method == DitherMethod.FLOYD_STEINBERG:
+            # Native PIL implementation (Fast, standard Euclidean)
             return img.quantize(palette=self._palette_image, dither=Image.FLOYDSTEINBERG)
+            
+        elif method == DitherMethod.FLOYD_STEINBERG_REDMEAN:
+            # Custom optimized implementation (Weighted Redmean)
+            return self._floyd_steinberg_redmean(img)
             
         elif method == DitherMethod.NONE:
             return img.quantize(palette=self._palette_image, dither=Image.NONE)

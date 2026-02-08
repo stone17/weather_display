@@ -56,7 +56,7 @@
                         <select id="liveDitherMethod" class="form-select bg-light border-secondary">
                             <option value="none" {% if config.get('dithering_method') == 'none' %}selected{% endif %}>None (Nearest)</option>
                             <option value="floyd_steinberg" {% if config.get('dithering_method', 'floyd_steinberg') == 'floyd_steinberg' %}selected{% endif %}>Floyd-Steinberg (Fast)</option>
-                            
+                            <option value="floyd_steinberg_redmean" {% if config.get('dithering_method') == 'floyd_steinberg_redmean' %}selected{% endif %}>Floyd-Steinberg (Redmean)</option>
                             <optgroup label="Ordered (Fast)">
                                 <option value="bayer_2" {% if config.get('dithering_method') == 'bayer_2' %}selected{% endif %}>Bayer 2x2</option>
                                 <option value="bayer_4" {% if config.get('dithering_method') == 'bayer_4' %}selected{% endif %}>Bayer 4x4</option>
