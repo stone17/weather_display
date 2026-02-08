@@ -139,7 +139,6 @@ class DitherProcessor:
     def _floyd_steinberg_redmean(self, img: Image.Image) -> Image.Image:
         """
         Optimized Redmean Floyd-Steinberg implementation.
-        Inlines math to avoid function call overhead for speed.
         """
         pixels = np.array(img, dtype=np.float32)
         h, w, _ = pixels.shape
@@ -158,23 +157,28 @@ class DitherProcessor:
             for x in range(w):
                 old_r, old_g, old_b = pixels[y, x]
                 
+                # --- CLAMPING FIX ---
+                # We must clamp the 'target' color for the distance calculation
+                # to prevent negative weights (runaway artifacts).
+                # We still use the unclamped 'old_r' for error calculation later.
+                
+                val_r = 255.0 if old_r > 255.0 else (0.0 if old_r < 0.0 else old_r)
+                val_g = 255.0 if old_g > 255.0 else (0.0 if old_g < 0.0 else old_g)
+                val_b = 255.0 if old_b > 255.0 else (0.0 if old_b < 0.0 else old_b)
+                
                 # --- INLINED REDMEAN DISTANCE ---
                 best_idx = 0
                 min_dist = 1e9
                 
                 for i in range(n_colors):
-                    # Redmean Mean Level
-                    rmean = (old_r + pal_r[i]) * 0.5
+                    # Redmean Mean Level (using Clamped Value)
+                    rmean = (val_r + pal_r[i]) * 0.5
                     
-                    dr = old_r - pal_r[i]
-                    dg = old_g - pal_g[i]
-                    db = old_b - pal_b[i]
+                    dr = val_r - pal_r[i]
+                    dg = val_g - pal_g[i]
+                    db = val_b - pal_b[i]
                     
-                    # Weights: 
-                    # Red: 2 + rmean/256
-                    # Green: 4.0
-                    # Blue: 2 + (255-rmean)/256
-                    
+                    # Weights
                     wr = 2.0 + (rmean * 0.00390625)
                     wb = 2.0 + ((255.0 - rmean) * 0.00390625)
                     
@@ -188,6 +192,7 @@ class DitherProcessor:
                 indices[y, x] = best_idx
                 new_r, new_g, new_b = pal[best_idx]
                 
+                # Error is calculated against the UNCLAMPED value to preserve energy
                 err_r = old_r - new_r
                 err_g = old_g - new_g
                 err_b = old_b - new_b
