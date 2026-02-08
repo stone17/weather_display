@@ -64,7 +64,7 @@ const char* CACHE_FILENAME  = "/current.bmp";
 // Verify this is the correct driver for your ReTerminal/Spectra E6
 // (Often GxEPD2_565c for the 5.65" ACeP, but keeping your setting)
 #define GxEPD2_DISPLAY_CLASS GxEPD2_7C
-#define GxEPD2_DRIVER_CLASS GxEPD2_730c_GDEP073E01
+#define GxEPD2_DRIVER_CLASS GxEPD2_730c_GDEY073D46
 #define MAX_DISPLAY_BUFFER_SIZE 16000
 #define MAX_HEIGHT(EPD) (EPD::HEIGHT <= MAX_DISPLAY_BUFFER_SIZE / (EPD::WIDTH / 8) ? EPD::HEIGHT : MAX_DISPLAY_BUFFER_SIZE / (EPD::WIDTH / 8))
 
@@ -98,9 +98,18 @@ const uint8_t REF_PALETTE[7][3] = {
   {255, 128, 0}    // Orange
 };
 
+// ==========================================
+// ===     CALIBRATED COLOR MAPPING       ===
+// ==========================================
+
 const uint16_t EPAPER_CONSTANTS[7] = {
-  GxEPD_BLACK, GxEPD_WHITE, GxEPD_GREEN, GxEPD_BLUE, 
-  GxEPD_RED,   GxEPD_YELLOW, GxEPD_ORANGE
+  GxEPD_BLACK,  // 0: Python Black  --> CMD: BLACK
+  GxEPD_WHITE,  // 1: Python White  --> CMD: WHITE
+  GxEPD_ORANGE, // 2: Python GREEN  --> CMD: ORANGE
+  GxEPD_YELLOW, // 3: Python BLUE   --> CMD: YELLOW
+  GxEPD_BLUE,   // 4: Python RED    --> CMD: BLUE
+  GxEPD_GREEN,  // 5: Python YELLOW --> CMD: GREEN
+  GxEPD_BLUE    // 6: Python ORANGE --> CMD: BLUE
 };
 
 // Robust color finder using Euclidean Distance
