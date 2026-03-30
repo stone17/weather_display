@@ -46,7 +46,15 @@ class DisplayOrchestrator:
         
         # 1. GENERATE CONTENT (RGB)
         img_rgb = None
-        saturation = 1.0  # Default: No boost
+        
+        # Determine fallback default based on mode
+        default_sat = 2.5 if mode == "photo" else 1.5
+        
+        # Fetch actual config value, handling potential string format from the UI
+        try:
+            saturation = float(self.config.get("saturation_boost", default_sat))
+        except (ValueError, TypeError):
+            saturation = default_sat
         
         if mode == "photo":
             logger.info("Delegating to: PhotoFrameGenerator")
@@ -54,18 +62,11 @@ class DisplayOrchestrator:
             generator = PhotoFrameGenerator(self.root_dir)
             img_rgb = generator.generate_image(width, height, sort_mode=sort_mode, specific_filename=specific_photo)
             
-            # CRITICAL FIX: Boost saturation for photos
-            # 2.0 = Double saturation. 
-            # This makes "pale blue" sky look "deep blue" so the ditherer detects it.
-            saturation = 2.5 
-            
         else:
             logger.info("Delegating to: WeatherService")
             colors = self.driver.get_rendering_colors()
             weather_svc = WeatherService(self.config, self.root_dir)
             img_rgb = await weather_svc.generate_image(width, height, colors)
-            # Weather graphs are already pure colors, less boost needed.
-            saturation = 1.5
 
         if not img_rgb:
             logger.error("Content generation failed.")
@@ -73,20 +74,23 @@ class DisplayOrchestrator:
 
         # 2. SAVE SOURCE (Preview)
         cache_dir = os.path.join(self.root_dir, "cache")
-        if not os.path.exists(cache_dir): os.makedirs(cache_dir)
+        if not os.path.exists(cache_dir): 
+            os.makedirs(cache_dir)
+            
         try:
             img_rgb.save(os.path.join(cache_dir, "latest_source.png"))
-        except: pass
+        except Exception as e: 
+            logger.warning(f"Could not save source preview: {e}")
 
         # 3. DITHERING
         try:
             dither_method = self.config.get("dithering_method", "floyd_steinberg")
             ditherer = DitherProcessor()
             
-            # PASS THE SATURATION ARGUMENT HERE
+            # Apply configured saturation boost during dithering
             img_dithered = ditherer.process(img_rgb, dither_method, saturation_boost=saturation)
             
-            # Save Dithered Result (Using the fixed uncompressed saver)
+            # Save Dithered Result
             self._save_dithered_file(img_dithered, cache_dir)
             
         except Exception as e:
@@ -108,12 +112,11 @@ class DisplayOrchestrator:
         save_path = ""
         if fmt == "bmp8":
             save_path = os.path.join(cache_dir, "latest_dithered.bmp")
-            # USE THE NEW FUNCTION HERE
             self._save_bmp_uncompressed(img, save_path) 
             
         elif fmt == "bmp24":
             save_path = os.path.join(cache_dir, "latest_dithered.bmp")
-            img.convert("RGB").save(save_path) # PIL 24-bit is usually fine, but 8-bit is safer for size
+            img.convert("RGB").save(save_path) 
         else:
             save_path = os.path.join(cache_dir, "latest_dithered.png")
             img.save(save_path)
@@ -134,7 +137,6 @@ class DisplayOrchestrator:
     def _save_bmp_uncompressed(self, image, filepath):
         """
         Saves a PIL P-mode image as an uncompressed 8-bit BMP.
-        Fixed format string to match standard BITMAPINFOHEADER (40 bytes).
         """
         width, height = image.size
         
@@ -143,31 +145,16 @@ class DisplayOrchestrator:
         padding = row_stride - width
         
         # 1. Header
-        # File Header (14) + DIB Header (40) + Palette (1024) = 1078 offset
         file_size = 54 + 1024 + (row_stride * height)
         offset = 54 + 1024
         
-        # BMP Header: Magic(2), FileSize(4), Rsv(2), Rsv(2), Offset(4)
         bmp_header = struct.pack('<2sIHHI', b'BM', file_size, 0, 0, offset)
         
-        # DIB Header (BITMAPINFOHEADER) - 40 bytes, 11 fields
-        # I=4byte-uint, i=4byte-int, H=2byte-uint
         dib_header = struct.pack('<IiiHHIIIIII', 
-            40,      # biSize
-            width,   # biWidth
-            height,  # biHeight
-            1,       # biPlanes
-            8,       # biBitCount (8 bits per pixel)
-            0,       # biCompression (BI_RGB = 0)
-            0,       # biSizeImage (0 is valid for BI_RGB)
-            0,       # biXPelsPerMeter
-            0,       # biYPelsPerMeter
-            0,       # biClrUsed
-            0        # biClrImportant
+            40, width, height, 1, 8, 0, 0, 0, 0, 0, 0
         )
         
         # 2. Extract Palette
-        # PIL returns flat [r,g,b, r,g,b...]
         raw_palette = image.getpalette() 
         if not raw_palette: raw_palette = [0]*768 
 
@@ -177,7 +164,7 @@ class DisplayOrchestrator:
                 r = raw_palette[i*3]
                 g = raw_palette[i*3+1]
                 b = raw_palette[i*3+2]
-                palette_data.extend([b, g, r, 0]) # BGR + Reserved (Alpha)
+                palette_data.extend([b, g, r, 0])
             else:
                 palette_data.extend([0, 0, 0, 0])
 
@@ -195,4 +182,4 @@ class DisplayOrchestrator:
             f.write(bmp_header)
             f.write(dib_header)
             f.write(palette_data)
-            f.write(pixel_data)
+            f.write(pixel_data) 

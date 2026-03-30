@@ -24,6 +24,15 @@ PALETTE_ACEP_7_RGB = [
     (240, 140, 10)   # Orange
 ]
 
+PALETTE_SPECTRA_6_RGB = [
+    (0, 0, 0),       # 0: Black 
+    (255, 255, 255), # 1: White 
+    (255, 255, 0),   # 2: Yellow 
+    (255, 0, 0),     # 3: Red 
+    (0, 0, 255),     # 4: Blue (Requires hardware shift to 0x05)
+    (0, 255, 0),     # 5: Green (Requires hardware shift to 0x06)
+]
+
 class DitherMethod(Enum):
     NONE = "none"
     FLOYD_STEINBERG = "floyd_steinberg"          # Standard PIL (Euclidean)

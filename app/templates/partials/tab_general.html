@@ -17,6 +17,7 @@
             <option value="generic" {% if config.get('hardware_profile') == 'generic' %}selected{% endif %}>Generic</option>
         </select>
     </div>
+<h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase">Image Processing</h6>
     <div class="col-6">
         <label class="form-label">Dithering</label>
         <select class="form-select form-select-sm" name="dithering_method">
@@ -44,7 +45,16 @@
         </select>
     </div>
 </div>
-
+<div class="mb-3">
+    <label class="form-label">Saturation Boost</label>
+    <div class="d-flex align-items-center gap-2">
+        <input type="range" class="form-range" name="saturation_boost" min="1.0" max="4.0" step="0.1" 
+               value="{{ config.get('saturation_boost', 1.5) }}" 
+               oninput="document.getElementById('satVal').innerText = this.value">
+        <span id="satVal" class="badge bg-secondary">{{ config.get('saturation_boost', 1.5) }}</span>
+    </div>
+    <div class="form-text">Increases color intensity before dithering (1.0 = None).</div>
+</div>
 <div class="mb-3">
     <label class="form-label">Auto-Update (Minutes)</label>
     <input type="number" class="form-control form-control-sm" name="update_interval_minutes" value="{{ config.get('update_interval_minutes', 0) }}" min="0" placeholder="0 = Off">

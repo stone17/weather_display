@@ -194,6 +194,10 @@
         const formData = new FormData();
         formData.append('method', method);
         
+        // Fetch current saturation from the slider
+        const satInput = document.querySelector('input[name="saturation_boost"]');
+        formData.append('saturation_boost', satInput ? satInput.value : 1.5);
+        
         const btn = document.querySelector('button[onclick="updateDither()"]');
         const originalText = btn.innerText;
         btn.innerText = "Processing..."; btn.disabled = true;

@@ -219,13 +219,15 @@ async def trigger_now():
     return RedirectResponse("/", status_code=303)
 
 @app.post("/apply_dither")
-async def apply_dither(method: str = Form(...)):
+async def apply_dither(method: str = Form(...), saturation_boost: float = Form(1.0)):
     if not os.path.exists(IMG_SOURCE_PATH): 
         return JSONResponse({"success": False, "error": "No source image found."})
     try:
         img = Image.open(IMG_SOURCE_PATH).convert("RGB")
         ditherer = DitherProcessor()
-        result = ditherer.process(img, method)
+        
+        # Apply the requested saturation boost
+        result = ditherer.process(img, method, saturation_boost=saturation_boost)
         
         fmt = cfg.data.get("output_format", "png")
         
@@ -339,4 +341,4 @@ async def update_settings(
         return JSONResponse({"success": True, "message": status_text})
 
     flash_message = {"type": "info", "text": status_text}
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/", status_code=303) 
