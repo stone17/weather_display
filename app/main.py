@@ -176,12 +176,16 @@ async def home(request: Request):
     g_conf = cfg.data.get('graph_24h_forecast_config', {})
     active_series = [s.get('parameter') for s in g_conf.get('series', [])] if g_conf else []
 
-    return templates.TemplateResponse("index.html", {
-        "request": request, "config": cfg.data, 
-        "providers": ["smhi", "owm", "openmeteo", "meteomatics", "google", "aqicn"], 
-        "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg,
-        "photos": photos, "active_graph_series": active_series
-    })
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html", 
+        context={
+            "request": request, "config": cfg.data, 
+            "providers": ["smhi", "owm", "openmeteo", "meteomatics", "google", "aqicn"], 
+            "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg,
+            "photos": photos, "active_graph_series": active_series
+        }
+    )
 
 @app.get("/image")
 async def get_image():
