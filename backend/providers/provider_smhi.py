@@ -162,33 +162,64 @@ class SMHIProvider(WeatherProvider):
         async with session.get(url) as response:
             response.raise_for_status()
             data = await response.json()
-            
+
+        now_utc = datetime.now(timezone.utc)
+        start_of_today = datetime(now_utc.year, now_utc.month, now_utc.day, tzinfo=timezone.utc)
+        
         hourly_data = []
+        historical_count = 0
+
         for entry in data.get('timeSeries', []):
-            dt_str = entry.get('validTime')
+            # NEW API FORMAT: timestamp is under 'time', not 'validTime'
+            dt_str = entry.get('time')
             if not dt_str: continue
             
-            # Python 3.7+ friendly ISO parsing for "Z" suffix
             valid_time = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-            params = {p['name']: p['values'][0] if p['values'] else 0 for p in entry.get('parameters', [])}
+            
+            # Drop historical/hindcast data
+            if valid_time < start_of_today:
+                historical_count += 1
+                continue
+
+            # NEW API FORMAT: flat dictionary under 'data'
+            params = entry.get('data', {})
+            
+            # Fallbacks included in case symbol key names vary slightly in production
+            symbol = int(params.get('symbol_code', params.get('weather_symbol', 0)))
+            temp = params.get('air_temperature', 0.0)
+            pressure = params.get('air_pressure_at_mean_sea_level', 1013.0)
+            humidity = params.get('relative_humidity', 50)
+            
+            clouds_pct = params.get('cloud_area_fraction', 0)
+            if 0 < clouds_pct <= 8.0:  # Handle octas if they sneak in
+                clouds_pct *= 12.5
+                
+            visibility = params.get('visibility_in_air', 10.0)
+            wind_speed = params.get('wind_speed', 0.0)
+            wind_direction = params.get('wind_from_direction', 0)
+            wind_gust = params.get('wind_speed_of_gust', 0.0)
+            
+            precip = params.get('precipitation_amount_mean', params.get('precipitation_amount_mean_deterministic', 0.0))
+            thunder = params.get('thunderstorm_probability', 0)
             
             hourly_data.append({
                 'valid_time': valid_time,
-                'symbol': int(params.get('Wsymb2', 0)),
-                'temperature': params.get('t', 0.0),
-                'pressure': params.get('msl', 1013.0),
-                'humidity': params.get('r', 50),
-                'total_cloud': params.get('tcc_mean', 0) * 12.5, # Octas to Percentage
-                'visibility': params.get('vis', 10.0),
-                'wind_speed': params.get('ws', 0.0),
-                'wind_direction': params.get('wd', 0),
-                'wind_gust': params.get('gust', 0.0),
-                'mean_precipitation': params.get('pmean', 0.0),
-                'frozen_precipitation': params.get('pmean', 0.0) if params.get('pcat', 0) in [1, 2] else 0.0,
-                'thunder': params.get('tstm', 0)
+                'symbol': symbol,
+                'temperature': temp,
+                'pressure': pressure,
+                'humidity': humidity,
+                'total_cloud': clouds_pct,
+                'visibility': visibility,
+                'wind_speed': wind_speed,
+                'wind_direction': wind_direction,
+                'wind_gust': wind_gust,
+                'mean_precipitation': precip,
+                'frozen_precipitation': 0.0, # Simplified for now
+                'thunder': thunder
             })
+        
+        print(f"DEBUG SMHI: Dropped {historical_count} past records. Kept {len(hourly_data)} future records.")
             
-        # Aggregate hourly values into pseudo-daily values (as pysmhi does)
         daily_map = {}
         for h in hourly_data:
             d_date = h['valid_time'].date()
