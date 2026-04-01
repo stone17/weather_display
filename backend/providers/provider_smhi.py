@@ -67,8 +67,8 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
     start_index = 0
     if smhi_daily:
         if len(smhi_daily) > 1:
-            first_day = getattr(smhi_daily[0], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
-            second_day = getattr(smhi_daily[1], 'valid_time', datetime.min.replace(tzinfo=timezone.utc)).date()
+            first_day = getattr(smhi_daily[0], 'valid_time', smhi_daily[0].get('valid_time') if isinstance(smhi_daily[0], dict) else datetime.min.replace(tzinfo=timezone.utc)).date()
+            second_day = getattr(smhi_daily[1], 'valid_time', smhi_daily[1].get('valid_time') if isinstance(smhi_daily[1], dict) else datetime.min.replace(tzinfo=timezone.utc)).date()
             if first_day == second_day:
                 start_index = 1
 
@@ -155,11 +155,76 @@ class SMHIProvider(WeatherProvider):
             print("Error: pysmhi library not found.")
             raise
 
+    async def _fetch_direct_v1(self, session, lat_str, lon_str):
+        print("Attempting direct fallback fetch using SMHI snow1g V1 API...")
+        url = f"https://opendata-download-metfcst.smhi.se/api/category/snow1g/version/1/geotype/point/lon/{lon_str}/lat/{lat_str}/data.json"
+        
+        async with session.get(url) as response:
+            response.raise_for_status()
+            data = await response.json()
+            
+        hourly_data = []
+        for entry in data.get('timeSeries', []):
+            dt_str = entry.get('validTime')
+            if not dt_str: continue
+            
+            # Python 3.7+ friendly ISO parsing for "Z" suffix
+            valid_time = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            params = {p['name']: p['values'][0] if p['values'] else 0 for p in entry.get('parameters', [])}
+            
+            hourly_data.append({
+                'valid_time': valid_time,
+                'symbol': int(params.get('Wsymb2', 0)),
+                'temperature': params.get('t', 0.0),
+                'pressure': params.get('msl', 1013.0),
+                'humidity': params.get('r', 50),
+                'total_cloud': params.get('tcc_mean', 0) * 12.5, # Octas to Percentage
+                'visibility': params.get('vis', 10.0),
+                'wind_speed': params.get('ws', 0.0),
+                'wind_direction': params.get('wd', 0),
+                'wind_gust': params.get('gust', 0.0),
+                'mean_precipitation': params.get('pmean', 0.0),
+                'frozen_precipitation': params.get('pmean', 0.0) if params.get('pcat', 0) in [1, 2] else 0.0,
+                'thunder': params.get('tstm', 0)
+            })
+            
+        # Aggregate hourly values into pseudo-daily values (as pysmhi does)
+        daily_map = {}
+        for h in hourly_data:
+            d_date = h['valid_time'].date()
+            if d_date not in daily_map:
+                daily_map[d_date] = []
+            daily_map[d_date].append(h)
+            
+        daily_data = []
+        for d_date, hours in daily_map.items():
+            temps = [h['temperature'] for h in hours]
+            precips = [h['mean_precipitation'] for h in hours]
+            
+            noon_hour = next((h for h in hours if h['valid_time'].hour == 12), hours[len(hours)//2])
+            
+            daily_data.append({
+                'valid_time': datetime(d_date.year, d_date.month, d_date.day, tzinfo=timezone.utc),
+                'symbol': noon_hour['symbol'],
+                'temperature_max': max(temps) if temps else 0,
+                'temperature_min': min(temps) if temps else 0,
+                'temperature': sum(temps)/len(temps) if temps else 0,
+                'pressure': noon_hour['pressure'],
+                'humidity': noon_hour['humidity'],
+                'wind_speed': max(h['wind_speed'] for h in hours),
+                'wind_direction': noon_hour['wind_direction'],
+                'wind_gust': max(h['wind_gust'] for h in hours),
+                'total_cloud': sum(h['total_cloud'] for h in hours) / len(hours),
+                'total_precipitation': sum(precips)
+            })
+            
+        print(f"{self.provider_name} raw data fetched successfully via direct API.")
+        return transform_smhi_data(daily_data, hourly_data, self.lat, self.lon)
+
     async def _fetch_from_api(self):
         print(f"Fetching data from {self.provider_name}...")
         
         # SMHI API strictly requires a maximum of 6 decimal places. 
-        # We explicitly round them here to prevent trailing float inaccuracies causing a 404.
         lon_str = str(round(self.lon, 6))
         lat_str = str(round(self.lat, 6))
         
@@ -168,17 +233,17 @@ class SMHIProvider(WeatherProvider):
                 client = self.SMHIPointForecast(lon_str, lat_str, session)
                 smhi_daily_data = await client.async_get_daily_forecast()
                 smhi_hourly_data = await client.async_get_hourly_forecast()
-                print(f"{self.provider_name} raw data fetched successfully.")
+                print(f"{self.provider_name} raw data fetched successfully via pysmhi.")
                 return transform_smhi_data(smhi_daily_data, smhi_hourly_data, self.lat, self.lon)
             
             except Exception as e:
+                # Catch failures (including the 404 from the outdated API endpoint)
+                # and trigger the direct v1 fallback natively.
                 error_msg = str(e)
-                # pysmhi wraps HTTP errors in its own SmhiForecastException.
-                # Catch the 404 gracefully here so it doesn't print a massive stack trace.
-                if "404" in error_msg:
-                    print(f"SMHI Error (404): The coordinates ({lat_str}, {lon_str}) are out of bounds or temporarily unavailable.")
-                    return None
+                print(f"SMHI library fetch failed ({error_msg}). Initiating fallback...")
                 
-                print(f"Error fetching {self.provider_name} data: {error_msg}")
-                # We remove traceback.print_exc() so the console stays clean during a fallback
-                return None
+                try:
+                    return await self._fetch_direct_v1(session, lat_str, lon_str)
+                except Exception as direct_e:
+                    print(f"Error fetching direct fallback {self.provider_name} data: {direct_e}")
+                    return None
