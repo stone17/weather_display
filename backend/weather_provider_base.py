@@ -221,8 +221,8 @@ def get_weather_provider(config, project_root_path_from_caller):
 
     try:
         if p_name == "meteomatics": provider = MeteomaticsProvider(config.get("meteomatics_username"), config.get("meteomatics_password"), **common_args)
-        elif p_name == "openweathermap": provider = OpenWeatherMapProvider(config.get("openweathermap_api_key"), **common_args)
-        elif p_name == "open-meteo": provider = OpenMeteoProvider(**common_args)
+        elif p_name in ["openweathermap", "owm"]: provider = OpenWeatherMapProvider(config.get("openweathermap_api_key"), **common_args)
+        elif p_name in ["open-meteo", "openmeteo"]: provider = OpenMeteoProvider(**common_args)
         elif p_name == "google": provider = GoogleWeatherProvider(config.get("google_api_key"), **common_args)
         elif p_name == "smhi": provider = SMHIProvider(**common_args)
         elif p_name == "aqicn": provider = AQICNProvider(config.get("aqicn_api_token"), **common_args)

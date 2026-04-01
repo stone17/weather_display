@@ -238,8 +238,8 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             processed_series_data[cfg.get('parameter')]['axis'] = current_ax
 
         if cfg.get('weather_symbols', {}).get('enabled', False):
-            _plot_weather_symbols_for_series(current_ax, s_times, s_values, parsed_hourly_data, cfg.get('weather_symbols'), icon_provider_preference_from_config, project_root_path_for_icons, app_config, icon_cache_path)
-
+            _plot_weather_symbols_for_series(current_ax, s_times, s_values, parsed_hourly_data, cfg.get('weather_symbols'), icon_provider_preference_from_config, project_root_path_for_icons, app_config, icon_cache_path=icon_cache_path)
+    
     # --- Process Right Axis Series ---
     is_first_on_right = True
     right_axis_used = False

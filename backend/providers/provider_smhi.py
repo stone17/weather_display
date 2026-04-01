@@ -157,22 +157,28 @@ class SMHIProvider(WeatherProvider):
 
     async def _fetch_from_api(self):
         print(f"Fetching data from {self.provider_name}...")
+        
+        # SMHI API strictly requires a maximum of 6 decimal places. 
+        # We explicitly round them here to prevent trailing float inaccuracies causing a 404.
+        lon_str = str(round(self.lon, 6))
+        lat_str = str(round(self.lat, 6))
+        
         async with aiohttp.ClientSession() as session:
             try:
-                client = self.SMHIPointForecast(str(self.lon), str(self.lat), session)
+                client = self.SMHIPointForecast(lon_str, lat_str, session)
                 smhi_daily_data = await client.async_get_daily_forecast()
                 smhi_hourly_data = await client.async_get_hourly_forecast()
                 print(f"{self.provider_name} raw data fetched successfully.")
                 return transform_smhi_data(smhi_daily_data, smhi_hourly_data, self.lat, self.lon)
             
-            except ClientResponseError as e:
-                # Specific handling for SMHI "Point Out of Bounds" (404)
-                if e.status == 404:
-                    print(f"SMHI Error: The coordinates ({self.lat}, {self.lon}) are out of bounds for the SMHI model (Scandinavia only).")
-                    return None
-                print(f"HTTP Error fetching {self.provider_name}: {e}")
-                return None
             except Exception as e:
-                print(f"Error fetching {self.provider_name} data: {e}")
-                traceback.print_exc()
+                error_msg = str(e)
+                # pysmhi wraps HTTP errors in its own SmhiForecastException.
+                # Catch the 404 gracefully here so it doesn't print a massive stack trace.
+                if "404" in error_msg:
+                    print(f"SMHI Error (404): The coordinates ({lat_str}, {lon_str}) are out of bounds or temporarily unavailable.")
+                    return None
+                
+                print(f"Error fetching {self.provider_name} data: {error_msg}")
+                # We remove traceback.print_exc() so the console stays clean during a fallback
                 return None

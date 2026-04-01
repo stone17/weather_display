@@ -2,6 +2,7 @@ import sys
 import os
 import logging
 from PIL import Image
+import yaml
 
 # Ensure backend directory is in python path
 backend_dir = os.path.dirname(os.path.abspath(__file__))
@@ -93,3 +94,23 @@ class WeatherService:
         )
         
         return img
+
+def load_configuration(base_path, local_path=None):
+    """
+    Loads the main configuration file and merges it with a local override file if it exists.
+    """
+    config = {}
+    try:
+        if os.path.exists(base_path):
+            with open(base_path, 'r') as f:
+                config = yaml.safe_load(f) or {}
+        
+        if local_path and os.path.exists(local_path):
+            with open(local_path, 'r') as f:
+                local_config = yaml.safe_load(f) or {}
+                config.update(local_config)
+                
+        return config
+    except Exception as e:
+        print(f"Error loading configuration: {e}")
+        return None
