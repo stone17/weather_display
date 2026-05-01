@@ -73,27 +73,23 @@ class ConfigManager:
         # --- Supplemental Providers Logic ---
         supp_providers = []
         
-        # 1. Open-Meteo
-        if form_data.get('supp_om_enabled'):
-            params = []
-            if form_data.get('supp_om_p_uvi'): params.append('uvi')
-            if form_data.get('supp_om_p_rain'): params.append('rain')
-            # Save even if params is empty, so toggle stays on
-            supp_providers.append({'provider_name': 'open-meteo', 'parameters': params})
+        supp_keys = [k for k in form_data.keys() if k.startswith('supp_provider_')]
+        supp_keys.sort(key=lambda x: int(x.split('_')[-1]) if x.split('_')[-1].isdigit() else 0)
         
-        # 2. AQICN
-        if form_data.get('supp_aqi_enabled'):
-            params = []
-            if form_data.get('supp_aqi_p_aqi'): params.append('aqi')
-            if form_data.get('supp_aqi_p_pm25'): params.append('aqi_pm25_avg')
-            # Save even if params is empty
-            supp_providers.append({'provider_name': 'AQICN', 'parameters': params})
+        for k in supp_keys:
+            idx = k.split('_')[-1]
+            prov = form_data.get(k)
+            if prov:
+                params = form_data.get(f'supp_params_{idx}', [])
+                if isinstance(params, str):
+                    params = [p.strip() for p in params.split(',') if p.strip()]
+                supp_providers.append({'provider_name': prov, 'parameters': params})
                 
         form_data['supplemental_providers'] = supp_providers
         
         # Cleanup temp UI keys
-        for k in ['supp_om_enabled', 'supp_om_p_uvi', 'supp_om_p_rain', 
-                  'supp_aqi_enabled', 'supp_aqi_p_aqi', 'supp_aqi_p_pm25']:
+        keys_to_remove = [k for k in form_data.keys() if k.startswith('supp_provider_') or k.startswith('supp_params_')]
+        for k in keys_to_remove:
             form_data.pop(k, None)
 
         # --- Daily Forecast Colors ---

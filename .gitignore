@@ -8,3 +8,4 @@ cache/
 test_outputs/
 weather_forecast_graph.png
 processed_image.bmp
+.aider*

@@ -181,7 +181,7 @@ async def home(request: Request):
         name="index.html", 
         context={
             "request": request, "config": cfg.data, 
-            "providers": ["smhi", "owm", "openmeteo", "meteomatics", "google", "aqicn"], 
+            "providers": ["smhi", "owm", "open-meteo", "meteomatics", "google", "aqicn"], 
             "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg,
             "photos": photos, "active_graph_series": active_series
         }
@@ -317,6 +317,11 @@ async def update_settings(
         if not isinstance(v, UploadFile)
     }
     
+    # Extract lists for dynamically generated checkbox groups
+    for k in form_data.keys():
+        if k.startswith('supp_params_'):
+            data_dict[k] = form_data.getlist(k)
+    
     data_dict['enable_mqtt'] = enable_mqtt
     data_dict['enable_server_push'] = enable_server_push
     data_dict['current_weather_display_details'] = current_details
@@ -345,4 +350,4 @@ async def update_settings(
         return JSONResponse({"success": True, "message": status_text})
 
     flash_message = {"type": "info", "text": status_text}
-    return RedirectResponse("/", status_code=303) 
+    return RedirectResponse("/", status_code=303)
