@@ -229,26 +229,32 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             data_range = data_s_max - data_s_min
             if data_range == 0: data_range = 1.0
             
-            raw_step = data_range / intervals
+            pad_pct = cfg.get('auto_pad_percent', 10.0) / 100.0
+            padded_min = data_s_min - (data_range * pad_pct)
+            padded_max = data_s_max + (data_range * pad_pct)
+            padded_range = padded_max - padded_min
+            if padded_range == 0: padded_range = 1.0
+            
+            raw_step = padded_range / intervals
             step = np.ceil(raw_step * 2) / 2.0
             if step == 0: step = 0.5
             
-            min_val = np.floor(data_s_min * 2) / 2.0
+            min_val = np.floor(padded_min * 2) / 2.0
             max_val = min_val + step * intervals
             
-            while max_val < data_s_max:
+            while max_val < padded_max:
                 step += 0.5
                 max_val = min_val + step * intervals
                 
-            excess = max_val - data_s_max
+            excess = max_val - padded_max
             shift = np.floor((excess / 2) * 2) / 2.0
             min_val -= shift
             max_val = min_val + step * intervals
             
-            while min_val > data_s_min:
+            while min_val > padded_min:
                 min_val -= 0.5
                 max_val = min_val + step * intervals
-            while max_val < data_s_max:
+            while max_val < padded_max:
                 step += 0.5
                 max_val = min_val + step * intervals
 
@@ -359,26 +365,32 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             data_range = data_s_max - data_s_min
             if data_range == 0: data_range = 1.0
             
-            raw_step = data_range / intervals
+            pad_pct = cfg.get('auto_pad_percent', 10.0) / 100.0
+            padded_min = data_s_min - (data_range * pad_pct)
+            padded_max = data_s_max + (data_range * pad_pct)
+            padded_range = padded_max - padded_min
+            if padded_range == 0: padded_range = 1.0
+            
+            raw_step = padded_range / intervals
             step = np.ceil(raw_step * 2) / 2.0
             if step == 0: step = 0.5
             
-            min_val = np.floor(data_s_min * 2) / 2.0
+            min_val = np.floor(padded_min * 2) / 2.0
             max_val = min_val + step * intervals
             
-            while max_val < data_s_max:
+            while max_val < padded_max:
                 step += 0.5
                 max_val = min_val + step * intervals
                 
-            excess = max_val - data_s_max
+            excess = max_val - padded_max
             shift = np.floor((excess / 2) * 2) / 2.0
             min_val -= shift
             max_val = min_val + step * intervals
             
-            while min_val > data_s_min:
+            while min_val > padded_min:
                 min_val -= 0.5
                 max_val = min_val + step * intervals
-            while max_val < data_s_max:
+            while max_val < padded_max:
                 step += 0.5
                 max_val = min_val + step * intervals
 

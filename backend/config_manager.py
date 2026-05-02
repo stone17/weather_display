@@ -173,6 +173,10 @@ class ConfigManager:
                     except: pass
                 else:
                     template['scale_type'] = "auto_padded"
+                    try:
+                        pad_val = form_data.get(f"series_{param}_pad")
+                        if pad_val not in [None, ""]: template['auto_pad_percent'] = float(pad_val)
+                    except: pass
 
                 # Fill Logic
                 fill_mode = form_data.get(f"series_{param}_fill", "none")

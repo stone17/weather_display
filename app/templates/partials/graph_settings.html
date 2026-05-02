@@ -112,6 +112,7 @@
                         <option value="auto">Auto</option>
                         <option value="manual" {% if s_conf.scale_type == 'manual_range' %}selected{% endif %}>Man</option>
                     </select>
+                    <input type="number" class="form-control form-control-sm py-0" name="series_{{param_id}}_pad" value="{{ s_conf.auto_pad_percent if is_active and s_conf.auto_pad_percent is not none else 10 }}" placeholder="Pad%" style="width: 50px; height: 22px; font-size: 0.75rem;" title="Auto Padding %">
                     <input type="number" class="form-control form-control-sm py-0" name="series_{{param_id}}_min" value="{{ s_conf.y_axis_min if is_active else '' }}" placeholder="Min" style="width: 50px; height: 22px; font-size: 0.75rem;">
                     <input type="number" class="form-control form-control-sm py-0" name="series_{{param_id}}_max" value="{{ s_conf.y_axis_max if is_active else '' }}" placeholder="Max" style="width: 50px; height: 22px; font-size: 0.75rem;">
                 </div>
