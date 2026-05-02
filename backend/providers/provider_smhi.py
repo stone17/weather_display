@@ -46,7 +46,7 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
             hourly_point = HourlyDataPoint(
                 dt=ts,
                 temp=hour_dict.get('temperature', 0.0),
-                feels_like=None,
+                feels_like=hour_dict.get('temperature', 0.0),
                 pressure=hour_dict.get('pressure', 1013.0),
                 humidity=hour_dict.get('humidity', 50),
                 clouds=hour_dict.get('total_cloud', 50),

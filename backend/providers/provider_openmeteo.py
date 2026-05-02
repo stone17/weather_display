@@ -107,9 +107,11 @@ def transform_open_meteo_data(om_json, lat, lon):
             if val is None: return default
             if isinstance(default, int) and isinstance(val, float): return int(val)
             return val
+        current_time = int(datetime.now(timezone.utc).timestamp())
+        current_hour_ts = current_time - (current_time % 3600)
         for i in range(num_hours):
             ts = parse_iso_time(hourly['time'][i])
-            if ts == 0: continue
+            if ts == 0 or ts < current_hour_ts: continue
             temp = get_hourly_val('temperature_2m', i, 0.0)
             weather_code = get_hourly_val('weather_code', i, 0)
             is_day = get_hourly_val('is_day', i, 1 if 6 <= datetime.fromtimestamp(ts, tz=timezone.utc).hour < 18 else 0)
@@ -215,7 +217,7 @@ class OpenMeteoProvider(WeatherProvider):
         base_url = "https://api.open-meteo.com/v1/forecast"
         params = { "latitude": self.lat, "longitude": self.lon, "current_weather": "true",
                    "temperature_unit": "celsius", "wind_speed_unit": "ms", "precipitation_unit": "mm",
-                   "timezone": "auto", "forecast_days": 7,
+                   "timezone": "UTC", "forecast_days": 7,
                    "hourly": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "precipitation_probability",
                               "precipitation", "rain", "snowfall", "weather_code", "pressure_msl", "cloud_cover",
                               "visibility", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m", "uv_index", "is_day"],

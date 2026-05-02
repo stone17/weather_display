@@ -212,11 +212,19 @@ def get_weather_provider(config, project_root_path_from_caller):
     if lat is None or lon is None:
         raise ValueError("Latitude and Longitude must be defined in config.")
 
+    # Build compound cache ID
+    cache_id_parts = [p_name]
+    for sup in config.get("supplemental_providers", []):
+        s_name = sup.get("provider_name", "").lower()
+        if s_name and s_name != p_name:
+            cache_id_parts.append(s_name)
+    compound_cache_id = "_".join(cache_id_parts)
+
     common_args = {
         "lat": float(lat), "lon": float(lon),
         "project_root_path": project_root_path_from_caller,
         "cache_duration_minutes": config.get("cache_duration_minutes", 60),
-        "provider_id_for_cache": p_name
+        "provider_id_for_cache": compound_cache_id
     }
 
     try:
