@@ -15,7 +15,7 @@ import matplotlib.pyplot as plt
 
 import matplotlib.dates as mdates
 from matplotlib.path import Path
-from matplotlib.ticker import MaxNLocator
+from matplotlib.ticker import MaxNLocator, LinearLocator, FormatStrFormatter
 from matplotlib.transforms import Affine2D
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 from datetime import datetime, timedelta, timezone
@@ -131,6 +131,9 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
     y_axis_label_fw = graph_plot_config.get('y_axis_label_font_weight', 'normal')
     x_axis_tick_fw = graph_plot_config.get('x_axis_tick_font_weight', 'normal')
     y_axis_tick_fw = graph_plot_config.get('y_axis_tick_font_weight', 'normal')
+    
+    # Ensure we have at least 2 bins for LinearLocator, fallback to root config if not in graph config
+    y_axis_tick_bins = max(2, int(graph_plot_config.get('y_axis_tick_bins', app_config.get('y_axis_tick_bins', 5))))
 
     fig, ax_primary_left = plt.subplots(figsize=(width / 100, height / 100), dpi=100)
     fig.patch.set_alpha(0) 
@@ -140,6 +143,17 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
     deferred_fill_between_two_series_configs = []
 
     for series_cfg in graph_plot_config.get('series', []):
+        # Robustly handle hidden axis options from the UI
+        axis_val = series_cfg.get('axis', 'left')
+        if axis_val == 'left_hidden':
+            series_cfg['axis'] = 'left'
+            series_cfg['show_y_axis_tick_labels'] = False
+            series_cfg['show_y_axis_ticks'] = False
+        elif axis_val == 'right_hidden':
+            series_cfg['axis'] = 'right'
+            series_cfg['show_y_axis_tick_labels'] = False
+            series_cfg['show_y_axis_ticks'] = False
+
         if series_cfg.get('plot_type') == 'fill_between_two_series':
             deferred_fill_between_two_series_configs.append(series_cfg)
             continue
@@ -185,17 +199,60 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             current_ax.yaxis.set_label_position("left")
             left_spine_offset += spine_offset_increment
 
-        data_s_min, data_s_max = min(s_values), max(s_values)
+        # Combine data ranges for linked series robustly
+        group_values = list(s_values)
+        my_link = cfg.get('linked_to')
+        if my_link in [None, "", "None", "none"]: my_link = None
+        my_param = cfg.get('parameter')
+        
+        for other_param, other_data in processed_series_data.items():
+            if other_param == my_param: continue
+            other_cfg = other_data['config']
+            other_link = other_cfg.get('linked_to')
+            if other_link in [None, "", "None", "none"]: other_link = None
+            
+            is_linked = False
+            if my_link and my_link == other_param: is_linked = True
+            elif other_link and other_link == my_param: is_linked = True
+            elif my_link and other_link and my_link == other_link: is_linked = True
+            
+            if is_linked:
+                group_values.extend(other_data['values'])
+
+        data_s_min, data_s_max = min(group_values), max(group_values)
         scale_type = cfg.get('scale_type', 'auto_padded')
         y_lim_min, y_lim_max = data_s_min, data_s_max
 
         if scale_type == "auto_padded":
+            # Calculate exact limits to ensure ticks are at .0 or .5
+            intervals = max(1, y_axis_tick_bins - 1)
             data_range = data_s_max - data_s_min
-            occupancy = cfg.get('data_occupancy_factor', 0.83)
-            if data_range == 0: y_lim_min = data_s_min - 1; y_lim_max = data_s_max + 1
-            else:
-                pad = ((data_range / occupancy) - data_range) / 2
-                y_lim_min = data_s_min - pad; y_lim_max = data_s_max + pad
+            if data_range == 0: data_range = 1.0
+            
+            raw_step = data_range / intervals
+            step = np.ceil(raw_step * 2) / 2.0
+            if step == 0: step = 0.5
+            
+            min_val = np.floor(data_s_min * 2) / 2.0
+            max_val = min_val + step * intervals
+            
+            while max_val < data_s_max:
+                step += 0.5
+                max_val = min_val + step * intervals
+                
+            excess = max_val - data_s_max
+            shift = np.floor((excess / 2) * 2) / 2.0
+            min_val -= shift
+            max_val = min_val + step * intervals
+            
+            while min_val > data_s_min:
+                min_val -= 0.5
+                max_val = min_val + step * intervals
+            while max_val < data_s_max:
+                step += 0.5
+                max_val = min_val + step * intervals
+
+            y_lim_min, y_lim_max = min_val, max_val
         elif scale_type == "manual_range":
             cfg_y_min = cfg.get('y_axis_min'); cfg_y_max = cfg.get('y_axis_max')
             if cfg_y_min is not None and cfg_y_max is not None: y_lim_min, y_lim_max = cfg_y_min, cfg_y_max
@@ -204,6 +261,14 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             else: y_lim_min = data_s_min * 0.9; y_lim_max = data_s_max * 1.1
 
         current_ax.set_ylim(y_lim_min, y_lim_max)
+        
+        # Force exact number of ticks and format them cleanly
+        if scale_type == "auto_padded":
+            current_ax.set_yticks(np.linspace(y_lim_min, y_lim_max, y_axis_tick_bins))
+        else:
+            current_ax.yaxis.set_major_locator(LinearLocator(numticks=y_axis_tick_bins))
+            
+        current_ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
         
         std_legend_item_label = cfg.get('legend_label') if cfg.get('legend_label') is not None else cfg.get('parameter')
 
@@ -230,8 +295,9 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
         current_ax.tick_params(axis='y', labelcolor=cfg.get('color', 'black'), labelsize=tick_label_font_size)
         for label in current_ax.get_yticklabels(): label.set_fontweight(y_axis_tick_fw)
         
-        if not cfg.get('show_y_axis_ticks', True): current_ax.set_yticks([])
-        elif not cfg.get('show_y_axis_tick_labels', True): current_ax.set_yticklabels([])
+        if not cfg.get('show_y_axis_ticks', True) or not cfg.get('show_y_axis_tick_labels', True): 
+            current_ax.set_yticks([])
+            current_ax.tick_params(axis='y', length=0)
 
         plotted_axes_info.append({'ax': current_ax, 'config': cfg, 'parameter': cfg.get('parameter')})
         if cfg.get('parameter') in processed_series_data:
@@ -263,16 +329,60 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             current_ax.yaxis.set_label_position("right")
             right_spine_offset += spine_offset_increment
 
-        data_s_min, data_s_max = min(s_values), max(s_values)
+        # Combine data ranges for linked series robustly
+        group_values = list(s_values)
+        my_link = cfg.get('linked_to')
+        if my_link in [None, "", "None", "none"]: my_link = None
+        my_param = cfg.get('parameter')
+        
+        for other_param, other_data in processed_series_data.items():
+            if other_param == my_param: continue
+            other_cfg = other_data['config']
+            other_link = other_cfg.get('linked_to')
+            if other_link in [None, "", "None", "none"]: other_link = None
+            
+            is_linked = False
+            if my_link and my_link == other_param: is_linked = True
+            elif other_link and other_link == my_param: is_linked = True
+            elif my_link and other_link and my_link == other_link: is_linked = True
+            
+            if is_linked:
+                group_values.extend(other_data['values'])
+
+        data_s_min, data_s_max = min(group_values), max(group_values)
         scale_type = cfg.get('scale_type', 'auto_padded')
         y_lim_min, y_lim_max = data_s_min, data_s_max
+        
         if scale_type == "auto_padded":
+            # Calculate exact limits to ensure ticks are at .0 or .5
+            intervals = max(1, y_axis_tick_bins - 1)
             data_range = data_s_max - data_s_min
-            occupancy = cfg.get('data_occupancy_factor', 0.83)
-            if data_range == 0: y_lim_min = data_s_min - 1; y_lim_max = data_s_max + 1
-            else:
-                pad = ((data_range / occupancy) - data_range) / 2
-                y_lim_min = data_s_min - pad; y_lim_max = data_s_max + pad
+            if data_range == 0: data_range = 1.0
+            
+            raw_step = data_range / intervals
+            step = np.ceil(raw_step * 2) / 2.0
+            if step == 0: step = 0.5
+            
+            min_val = np.floor(data_s_min * 2) / 2.0
+            max_val = min_val + step * intervals
+            
+            while max_val < data_s_max:
+                step += 0.5
+                max_val = min_val + step * intervals
+                
+            excess = max_val - data_s_max
+            shift = np.floor((excess / 2) * 2) / 2.0
+            min_val -= shift
+            max_val = min_val + step * intervals
+            
+            while min_val > data_s_min:
+                min_val -= 0.5
+                max_val = min_val + step * intervals
+            while max_val < data_s_max:
+                step += 0.5
+                max_val = min_val + step * intervals
+
+            y_lim_min, y_lim_max = min_val, max_val
         elif scale_type == "manual_range":
             cfg_y_min = cfg.get('y_axis_min'); cfg_y_max = cfg.get('y_axis_max')
             if cfg_y_min is not None and cfg_y_max is not None: y_lim_min, y_lim_max = cfg_y_min, cfg_y_max
@@ -281,6 +391,14 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             else: y_lim_min = data_s_min * 0.9; y_lim_max = data_s_max * 1.1
 
         current_ax.set_ylim(y_lim_min, y_lim_max)
+        
+        # Force exact number of ticks and format them cleanly
+        if scale_type == "auto_padded":
+            current_ax.set_yticks(np.linspace(y_lim_min, y_lim_max, y_axis_tick_bins))
+        else:
+            current_ax.yaxis.set_major_locator(LinearLocator(numticks=y_axis_tick_bins))
+            
+        current_ax.yaxis.set_major_formatter(FormatStrFormatter('%.1f'))
 
         std_legend_item_label = cfg.get('legend_label') if cfg.get('legend_label') is not None else cfg.get('parameter')
         
@@ -307,8 +425,9 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
         current_ax.tick_params(axis='y', labelcolor=cfg.get('color', 'black'), labelsize=tick_label_font_size)
         for label in current_ax.get_yticklabels(): label.set_fontweight(y_axis_tick_fw)
 
-        if not cfg.get('show_y_axis_ticks', True): current_ax.set_yticks([])
-        elif not cfg.get('show_y_axis_tick_labels', True): current_ax.set_yticklabels([])
+        if not cfg.get('show_y_axis_ticks', True) or not cfg.get('show_y_axis_tick_labels', True): 
+            current_ax.set_yticks([])
+            current_ax.tick_params(axis='y', length=0)
 
         plotted_axes_info.append({'ax': current_ax, 'config': cfg, 'parameter': cfg.get('parameter')})
         if cfg.get('parameter') in processed_series_data:
@@ -319,6 +438,23 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
 
     if not left_axis_used: ax_primary_left.set_yticks([])
     if not right_axis_used and ax_primary_right: ax_primary_right.set_visible(False)
+
+    # --- Sync limits for linked axes ---
+    for ax_info in plotted_axes_info:
+        my_link = ax_info['config'].get('linked_to')
+        if my_link in [None, "", "None", "none"]: my_link = None
+        
+        if my_link:
+            target_ax_info = next((info for info in plotted_axes_info if info['parameter'] == my_link), None)
+            if target_ax_info:
+                ax_info['ax'].set_ylim(target_ax_info['ax'].get_ylim())
+                
+                # Sync ticks to ensure they match exactly
+                if ax_info['config'].get('show_y_axis_ticks', True) and ax_info['config'].get('show_y_axis_tick_labels', True):
+                    ax_info['ax'].set_yticks(target_ax_info['ax'].get_yticks())
+                else:
+                    ax_info['ax'].set_yticks([])
+                    ax_info['ax'].tick_params(axis='y', length=0)
 
     # --- Fill Between Areas ---
     for fill_cfg in deferred_fill_between_two_series_configs:

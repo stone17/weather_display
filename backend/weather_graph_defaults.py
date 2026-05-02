@@ -7,7 +7,8 @@ GRAPH_SERIES_DEFAULTS = {
     },
     'feels_like': {
         'parameter': 'feels_like', 'axis': 'left', 'color': 'gray', 
-        'legend_label': 'Feel', 'line_style': 'dotted', 'linewidth': 1.5
+        'legend_label': 'Feel', 'line_style': 'dotted', 'linewidth': 1.5,
+        'linked_to': 'temp'
     },
     'rain': {
         'parameter': 'rain', 'axis': 'right', 'color': 'blue', 
