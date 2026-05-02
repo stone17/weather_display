@@ -107,11 +107,9 @@ def transform_open_meteo_data(om_json, lat, lon):
             if val is None: return default
             if isinstance(default, int) and isinstance(val, float): return int(val)
             return val
-        current_time = int(datetime.now(timezone.utc).timestamp())
-        current_hour_ts = current_time - (current_time % 3600)
         for i in range(num_hours):
             ts = parse_iso_time(hourly['time'][i])
-            if ts == 0 or ts < current_hour_ts: continue
+            if ts == 0: continue
             temp = get_hourly_val('temperature_2m', i, 0.0)
             weather_code = get_hourly_val('weather_code', i, 0)
             is_day = get_hourly_val('is_day', i, 1 if 6 <= datetime.fromtimestamp(ts, tz=timezone.utc).hour < 18 else 0)
@@ -143,10 +141,13 @@ def transform_open_meteo_data(om_json, lat, lon):
             )
             transformed_data['hourly'].append(hourly_point)
         if transformed_data['hourly'] and transformed_data['current']:
-             if transformed_data['hourly'][0].uvi is not None:
-                 transformed_data['current']['uvi'] = transformed_data['hourly'][0].uvi
+             now_ts = int(datetime.now(timezone.utc).timestamp())
+             cur_hourly = min(transformed_data['hourly'], key=lambda h: abs(h.dt - now_ts))
+             if cur_hourly.uvi is not None:
+                 transformed_data['current']['uvi'] = cur_hourly.uvi
              if transformed_data['current'].get('feels_like') is None:
-                 transformed_data['current']['feels_like'] = transformed_data['hourly'][0].feels_like
+                 transformed_data['current']['feels_like'] = cur_hourly.feels_like
+
     transformed_data['hourly'] = transformed_data['hourly'][:48]
     daily = om_json.get('daily')
     if daily and 'time' in daily:

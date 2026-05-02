@@ -113,7 +113,8 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
 
     # --- Current Data Fallback ---
     if transformed_data['hourly']:
-        cur = transformed_data['hourly'][0]
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        cur = min(transformed_data['hourly'], key=lambda h: abs(h.dt - now_ts))
         transformed_data['current'] = {
             'dt': cur.dt, 'temp': cur.temp, 'feels_like': cur.feels_like,
             'pressure': cur.pressure, 'humidity': cur.humidity, 'uvi': 0,

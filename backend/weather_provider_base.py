@@ -242,8 +242,12 @@ def get_weather_provider(config, project_root_path_from_caller):
             
             s_common = common_args.copy(); s_common["provider_id_for_cache"] = s_name
             s_inst = None
-            if s_name == "aqicn": s_inst = AQICNProvider(config.get("aqicn_api_token"), **s_common)
-            elif s_name == "open-meteo": s_inst = OpenMeteoProvider(**s_common)
+            if s_name == "meteomatics": s_inst = MeteomaticsProvider(config.get("meteomatics_username"), config.get("meteomatics_password"), **s_common)
+            elif s_name in ["openweathermap", "owm"]: s_inst = OpenWeatherMapProvider(config.get("openweathermap_api_key"), **s_common)
+            elif s_name in ["open-meteo", "openmeteo"]: s_inst = OpenMeteoProvider(**s_common)
+            elif s_name == "google": s_inst = GoogleWeatherProvider(config.get("google_api_key"), **s_common)
+            elif s_name == "smhi": s_inst = SMHIProvider(**s_common)
+            elif s_name == "aqicn": s_inst = AQICNProvider(config.get("aqicn_api_token"), **s_common)
             
             if s_inst: provider.supplemental_providers_info.append({'instance': s_inst, 'parameters': sup.get("parameters", [])})
             
