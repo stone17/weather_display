@@ -91,7 +91,7 @@ def transform_open_meteo_data(om_json, lat, lon):
         current_desc = get_wmo_code_description(current.get('weather_code', 0))
         transformed_data['current'] = {
             'dt': current_ts, 'sunrise': 0, 'sunset': 0, 'temp': current_temp,
-            'feels_like': current.get('apparent_temperature', current_temp),
+            'feels_like': current.get('apparent_temperature'),
             'pressure': current.get('pressure_msl', 1013), 'humidity': current.get('relative_humidity_2m', 50),
             'dew_point': 0, 'uvi': 0, 'clouds': current.get('cloud_cover', 50), 'visibility': 10000,
             'wind_speed': current.get('wind_speed_10m', 0), 'wind_deg': current.get('wind_direction_10m', 0),
@@ -140,8 +140,11 @@ def transform_open_meteo_data(om_json, lat, lon):
                 snow_1h=get_hourly_val('snowfall', i, 0.0)
             )
             transformed_data['hourly'].append(hourly_point)
-        if transformed_data['hourly'] and transformed_data['current'] and transformed_data['hourly'][0].uvi is not None:
-             transformed_data['current']['uvi'] = transformed_data['hourly'][0].uvi
+        if transformed_data['hourly'] and transformed_data['current']:
+             if transformed_data['hourly'][0].uvi is not None:
+                 transformed_data['current']['uvi'] = transformed_data['hourly'][0].uvi
+             if transformed_data['current'].get('feels_like') is None:
+                 transformed_data['current']['feels_like'] = transformed_data['hourly'][0].feels_like
     transformed_data['hourly'] = transformed_data['hourly'][:48]
     daily = om_json.get('daily')
     if daily and 'time' in daily:

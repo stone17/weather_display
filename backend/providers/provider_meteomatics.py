@@ -101,7 +101,7 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         hourly_point = HourlyDataPoint(
             dt=int(ts_dt.timestamp()),
             temp=float(temp_val),
-            feels_like=float(temp_val), # Meteomatics basic doesn't provide feels_like per hour
+            feels_like=None, # Meteomatics basic doesn't provide feels_like per hour
             pressure=1013.0, # Placeholder
             humidity=50, # Placeholder
             dew_point=0.0, # Placeholder
@@ -149,7 +149,7 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         }
         transformed_data['hourly'] = hourly_list[:48]
     else: # Fallback current
-        transformed_data['current'] = {'dt': int(datetime.now(timezone.utc).timestamp()), 'temp': 0, 'feels_like': 0, 'pressure': 1013, 'humidity': 50, 'uvi': 0, 'wind_speed': 0, 'wind_deg': 0, 'weather': [{'id': 0, 'main': 'Unknown', 'description': 'Unknown', 'icon': 'na'}], 'rain': {'1h': 0}}
+        transformed_data['current'] = {'dt': int(datetime.now(timezone.utc).timestamp()), 'temp': 0, 'feels_like': None, 'pressure': 1013, 'humidity': 50, 'uvi': 0, 'wind_speed': 0, 'wind_deg': 0, 'weather': [{'id': 0, 'main': 'Unknown', 'description': 'Unknown', 'icon': 'na'}], 'rain': {'1h': 0}}
 
     daily_data_by_day_start = defaultdict(dict)
     for param_key in [temp_max_24h_param, temp_min_24h_param, precip_24h_param, symbol_24h_param, wind_gust_24h_param]:
@@ -189,11 +189,11 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
             temp_min=temp_min,
             temp_max=temp_max,
             temp_night=temp_min, # Approximation
-            temp_eve=temp_min,   # Approximation
-            temp_morn=temp_min,  # Approximation
-            feels_like_day=temp_day_approx, # Approximation
-            feels_like_night=temp_min,      # Approximation
-            pressure=1013.0, # Placeholder
+                temp_eve=temp_min,   # Approximation
+                temp_morn=temp_min,  # Approximation
+                feels_like_day=None, # Approximation
+                feels_like_night=None,      # Approximation
+                pressure=1013.0, # Placeholder
             humidity=50,    # Placeholder
             wind_speed=sum(hourly_agg['winds']) / len(hourly_agg['winds']) if hourly_agg['winds'] else 0.0,
             wind_gust=day_data.get(wind_gust_24h_param, 0.0),

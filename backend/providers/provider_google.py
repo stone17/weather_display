@@ -86,7 +86,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
     owm_icon = get_owm_icon_from_google_code(condition_code, cc.get('isDaytime', True))
     transformed_data['current'] = {
         'dt': current_ts, 'sunrise': 0, 'sunset': 0, 'temp': temp,
-        'feels_like': cc.get('feelsLikeTemperature', {}).get('degrees', temp),
+        'feels_like': cc.get('feelsLikeTemperature', {}).get('degrees'),
         'pressure': cc.get('airPressure', {}).get('meanSeaLevelMillibars', 1013.0),
         'humidity': cc.get('relativeHumidity', 50), 'dew_point': cc.get('dewPoint', {}).get('degrees', 0.0),
         'uvi': cc.get('uvIndex', 0), 'clouds': cc.get('cloudCover', 50),
@@ -109,7 +109,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
         hourly_point = HourlyDataPoint(
             dt=ts_h,
             temp=temp_h,
-            feels_like=hour_fc.get('feelsLikeTemperature', {}).get('degrees', temp_h),
+            feels_like=hour_fc.get('feelsLikeTemperature', {}).get('degrees'),
             pressure=hour_fc.get('airPressure', {}).get('meanSeaLevelMillibars', 1013.0),
             humidity=hour_fc.get('relativeHumidity', 50),
             dew_point=hour_fc.get('dewPoint', {}).get('degrees', 0.0),
@@ -154,8 +154,8 @@ def transform_google_weather_data(google_raw_data, lat, lon):
             temp_night=temp_min, # Approximation
             temp_eve=temp_min,   # Approximation
             temp_morn=temp_min,  # Approximation
-            feels_like_day=day_fc.get('feelsLikeMaxTemperature', {}).get('degrees', temp_max),
-            feels_like_night=day_fc.get('feelsLikeMinTemperature', {}).get('degrees', temp_min),
+            feels_like_day=day_fc.get('feelsLikeMaxTemperature', {}).get('degrees'),
+            feels_like_night=day_fc.get('feelsLikeMinTemperature', {}).get('degrees'),
             humidity=active_fc.get('relativeHumidity', 50),
             wind_speed=round(active_fc.get('wind', {}).get('speed', {}).get('value', 0.0) / 3.6, 2),
             wind_deg=active_fc.get('wind', {}).get('direction', {}).get('degrees', 0),
