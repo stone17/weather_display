@@ -1,6 +1,6 @@
 <h6 class="text-muted border-bottom pb-1 mb-2 small text-uppercase">Display Mode</h6>
 <div class="mb-3">
-    <select class="form-select" name="display_mode">
+    <select class="form-select" name="display_mode" id="displayModeSelect">
         <option value="weather" {% if config.get('display_mode') == 'weather' %}selected{% endif %}>Weather Station</option>
         <option value="photo" {% if config.get('display_mode') == 'photo' %}selected{% endif %}>Photo Frame</option>
     </select>

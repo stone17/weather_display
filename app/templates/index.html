@@ -146,14 +146,28 @@
 
     // --- DYNAMIC API KEY VISIBILITY ---
     function updateApiVisibility() {
-        const provider = document.getElementById('weatherProviderSelect').value;
+        const provider = document.getElementById('weatherProviderSelect');
+        if (!provider) return;
+        const providerValue = provider.value;
         document.querySelectorAll('.apikey-group').forEach(el => el.style.display = 'none');
-        if(provider === 'openweathermap' || provider === 'owm') {
+        if(providerValue === 'openweathermap' || providerValue === 'owm') {
             const el = document.getElementById('apikey_owm'); if(el) el.style.display = 'block';
-        } else if(provider === 'meteomatics') {
+        } else if(providerValue === 'meteomatics') {
             const el = document.getElementById('apikey_meteomatics'); if(el) el.style.display = 'block';
-        } else if(provider === 'smhi') {
+        } else if(providerValue === 'smhi') {
             const el = document.getElementById('apikey_smhi'); if(el) el.style.display = 'block';
+        }
+    }
+
+    function toggleGraphEditor() {
+        const modeSelect = document.getElementById('displayModeSelect');
+        const graphCard = document.getElementById('graphEditorCard');
+        if (modeSelect && graphCard) {
+            if (modeSelect.value === 'weather') {
+                graphCard.classList.remove('d-none');
+            } else {
+                graphCard.classList.add('d-none');
+            }
         }
     }
 
@@ -164,9 +178,13 @@
     });
     const providerSelect = document.getElementById('weatherProviderSelect');
     if(providerSelect) providerSelect.addEventListener('change', updateApiVisibility);
+    
+    const displayModeSelect = document.getElementById('displayModeSelect');
+    if(displayModeSelect) displayModeSelect.addEventListener('change', toggleGraphEditor);
 
     document.addEventListener("DOMContentLoaded", function() {
         updateApiVisibility();
+        toggleGraphEditor();
         const tabKey = "weatherDisplay_activeTab";
         const savedTab = sessionStorage.getItem(tabKey) || '#tab-general';
         const triggerEl = document.querySelector(`button[data-bs-target="${savedTab}"]`);
