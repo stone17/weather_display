@@ -142,6 +142,8 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
     processed_series_data = {} 
     deferred_fill_between_two_series_configs = []
 
+    print(f"DEBUG image_generator: Configured graph series: {[s.get('parameter') for s in graph_plot_config.get('series', [])]}")
+
     for series_cfg in graph_plot_config.get('series', []):
         # Robustly handle hidden axis options from the UI
         axis_val = series_cfg.get('axis', 'left')
@@ -159,7 +161,18 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             continue
         param_name = series_cfg.get('parameter')
         if not param_name: continue
-        values = [h.get(param_name) for h in parsed_hourly_data]
+        
+        actual_param = 'uvi' if param_name in ['uv', 'uv_index'] else param_name
+        
+        values = []
+        for h in parsed_hourly_data:
+            v = h.get(actual_param)
+            if v is None and actual_param in ['uvi', 'rain', 'snow', 'rain_1h', 'snow_1h', 'pop']:
+                v = 0.0
+            values.append(v)
+            
+        print(f"DEBUG image_generator: Processing series '{param_name}' (actual: '{actual_param}'). Extracted {len(values)} values. Sample: {values[:5]}")
+        
         series_times_filtered, series_values_filtered = [], []
         for t, v in zip(original_times, values):
             if t is not None and v is not None:

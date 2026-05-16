@@ -108,7 +108,7 @@ class ConfigManager:
         existing_series_list = current_graph_cfg.get('series', [])
         
         graph_hours = form_data.pop('graph_time_range_hours', 24)
-        supported_params = ['temp', 'feels_like', 'rain', 'wind_speed', 'wind_gust', 'humidity', 'pressure']
+        supported_params = ['temp', 'feels_like', 'rain', 'wind_speed', 'wind_gust', 'humidity', 'pressure', 'uvi']
         new_series_config = []
         
         for param in supported_params:

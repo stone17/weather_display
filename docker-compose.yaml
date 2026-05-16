@@ -3,6 +3,8 @@ services:
     build: .
     container_name: weather_display
     restart: unless-stopped
+    environment:
+      - TZ=Europe/Stockholm
     ports:
       - "8000:8000"
     volumes:

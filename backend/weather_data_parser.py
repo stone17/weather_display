@@ -157,8 +157,12 @@ class WeatherData:
 
         hours_to_display = self.graph_config.get('graph_time_range_hours', 24)
         for h_data in self.hourly_raw[:hours_to_display]:
-            # h_data is an HourlyDataPoint object, access attributes directly
-            dt_val = h_data.dt
+            is_dict = isinstance(h_data, dict)
+            dt_val = h_data.get('dt') if is_dict else getattr(h_data, 'dt', None)
+            
+            if dt_val is None:
+                continue
+                
             try:
                 # Attempt to create a datetime object to catch obviously bad timestamps early
                 # (e.g., if dt_val is not a number or is extremely out of range)
@@ -174,7 +178,7 @@ class WeatherData:
                 # print(f"Warning: Skipping hourly data point with year <= 1970: {dt_obj}")
                 continue
 
-            current_owm_icon = h_data.weather_icon
+            current_owm_icon = h_data.get('weather_icon') if is_dict else getattr(h_data, 'weather_icon', None)
             adjusted_owm_icon = current_owm_icon # Start with the provided icon
 
             # Adjust icon for day/night if it's a daytime icon and it's actually night
@@ -192,17 +196,16 @@ class WeatherData:
 
             entry = {
                 'dt': dt_obj,
-                'temp': h_data.temp,
-                'feels_like': h_data.feels_like,
-                'humidity': h_data.humidity,
-                'uvi': h_data.uvi,
-                'wind_speed': h_data.wind_speed,
-                'wind_deg': h_data.wind_deg,
-                'wind_gust': h_data.wind_gust,
-                'rain': h_data.rain_1h,
-                'snow': h_data.snow_1h,
-                'weather_icon': adjusted_owm_icon, # Use the adjusted icon
-                # 'weather_google_icon_uri' is removed; parsers should provide OWM code in weather_icon
+                'temp': h_data.get('temp') if is_dict else getattr(h_data, 'temp', None),
+                'feels_like': h_data.get('feels_like') if is_dict else getattr(h_data, 'feels_like', None),
+                'humidity': h_data.get('humidity') if is_dict else getattr(h_data, 'humidity', None),
+                'uvi': h_data.get('uvi') if is_dict else getattr(h_data, 'uvi', None),
+                'wind_speed': h_data.get('wind_speed') if is_dict else getattr(h_data, 'wind_speed', None),
+                'wind_deg': h_data.get('wind_deg') if is_dict else getattr(h_data, 'wind_deg', None),
+                'wind_gust': h_data.get('wind_gust') if is_dict else getattr(h_data, 'wind_gust', None),
+                'rain': h_data.get('rain_1h') if is_dict else getattr(h_data, 'rain_1h', None),
+                'snow': h_data.get('snow_1h') if is_dict else getattr(h_data, 'snow_1h', None),
+                'weather_icon': adjusted_owm_icon,
             }
             parsed_hourly.append(entry)
         return parsed_hourly    
