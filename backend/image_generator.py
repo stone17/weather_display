@@ -488,7 +488,9 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
     min_time, max_time = min(all_times), max(all_times)
     ax_primary_left.set_xlim(left=min_time, right=max_time + timedelta(minutes=30))
     ax_primary_left.xaxis.set_major_locator(mdates.HourLocator(interval=graph_plot_config.get('x_axis_hour_interval', 6)))
-    ax_primary_left.xaxis.set_major_formatter(mdates.DateFormatter(graph_plot_config.get('x_axis_time_format', '%H:%M')))
+    
+    local_tz = all_times[0].tzinfo if all_times else None
+    ax_primary_left.xaxis.set_major_formatter(mdates.DateFormatter(graph_plot_config.get('x_axis_time_format', '%H:%M'), tz=local_tz))
     plt.xticks(rotation=graph_plot_config.get('x_axis_tick_rotation', 0), ha="center", fontsize=tick_label_font_size, fontweight=x_axis_tick_fw)
     
     ax_primary_left.grid(True, which='major', axis='x', linestyle='-', color='grey', alpha=0.3)
@@ -635,7 +637,7 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             h_map = {h['dt']: h for h in parsed_hourly_data if h.get('dt')}
             path = Path([(1,0), (-0.4,0.4), (-0.4,-0.4), (1,0)], [Path.MOVETO, Path.LINETO, Path.LINETO, Path.CLOSEPOLY])
             for tick_val in arrow_ax.get_xticks():
-                dt = mdates.num2date(tick_val).astimezone(timezone.utc)
+                dt = mdates.num2date(tick_val).astimezone(local_tz)
                 match = min(h_map.keys(), key=lambda d: abs(d-dt), default=None)
                 if match and match in h_map:
                     ws = h_map[match].get(sp_p); wd = h_map[match].get(deg_p)

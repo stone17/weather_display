@@ -86,6 +86,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
     owm_icon = get_owm_icon_from_google_code(condition_code, cc.get('isDaytime', True))
     transformed_data['current'] = {
         'dt': current_ts, 'sunrise': 0, 'sunset': 0, 'temp': temp,
+        'timezone': tz_name, 'timezone_offset': 0,
         'feels_like': cc.get('feelsLikeTemperature', {}).get('degrees'),
         'pressure': cc.get('airPressure', {}).get('meanSeaLevelMillibars', 1013.0),
         'humidity': cc.get('relativeHumidity', 50), 'dew_point': cc.get('dewPoint', {}).get('degrees', 0.0),

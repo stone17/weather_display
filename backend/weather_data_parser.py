@@ -1,5 +1,5 @@
 # weather_data_parser.py
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Union, Dict, Any
 
 class WeatherData:
@@ -13,12 +13,30 @@ class WeatherData:
         self.daily_raw = daily_raw if daily_raw is not None else []
         # self.icon_provider_preference = icon_provider_preference.lower() # Removed
         self.graph_config = graph_config if graph_config is not None else {}
+        self.tz = self._determine_timezone()
 
         self.current = self._parse_current_weather()
         self.hourly = self._parse_hourly_forecast()  # Note: Parsing, no conversion yet.
         self.daily = self._parse_daily_forecast()    # Same here.
         self.temperature_unit = temp_unit_pref.upper()
         self._convert_temperatures_if_needed() # Conversion happens after parsing.
+
+    def _determine_timezone(self):
+        tz_name = self.current_raw.get('timezone')
+        tz_offset = self.current_raw.get('timezone_offset')
+        
+        if tz_name and tz_name != 'UTC':
+            try:
+                import zoneinfo
+                return zoneinfo.ZoneInfo(tz_name)
+            except Exception:
+                pass
+                
+        if tz_offset is not None:
+            return timezone(timedelta(seconds=tz_offset))
+            
+        # Fallback to system local timezone
+        return datetime.now().astimezone().tzinfo
 
     def _convert_temperatures_if_needed(self):
         if self.temperature_unit == "F":
@@ -55,7 +73,31 @@ class WeatherData:
         weather_info_list = self.current_raw.get('weather', [])
         weather_info = weather_info_list[0] if weather_info_list else {}
         # Expecting OWM icon code directly from the raw data (e.g., weather[0]['icon'] from OWM)
-        current_parsed['weather_icon'] = weather_info.get('icon')
+        raw_icon = weather_info.get('icon')
+        
+        # Adjust current icon for day/night based on sunrise/sunset
+        if raw_icon:
+            dt_val = self.current_raw.get('dt')
+            sunrise_ts = self.current_raw.get('sunrise')
+            sunset_ts = self.current_raw.get('sunset')
+            
+            if dt_val and sunrise_ts and sunset_ts:
+                is_day = sunrise_ts <= dt_val < sunset_ts
+                print(f"DEBUG weather_data_parser: dt={dt_val} ({datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(self.tz)}), sunrise={sunrise_ts} ({datetime.fromtimestamp(sunrise_ts, tz=timezone.utc).astimezone(self.tz)}), sunset={sunset_ts} ({datetime.fromtimestamp(sunset_ts, tz=timezone.utc).astimezone(self.tz)}), is_day={is_day}")
+                if is_day and raw_icon.endswith('n'):
+                    raw_icon = raw_icon[:-1] + 'd'
+                elif not is_day and raw_icon.endswith('d'):
+                    raw_icon = raw_icon[:-1] + 'n'
+            elif dt_val:
+                # Fallback if no sunrise/sunset
+                dt_obj = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(self.tz)
+                is_day = 6 <= dt_obj.hour < 18
+                if is_day and raw_icon.endswith('n'):
+                    raw_icon = raw_icon[:-1] + 'd'
+                elif not is_day and raw_icon.endswith('d'):
+                    raw_icon = raw_icon[:-1] + 'n'
+                    
+        current_parsed['weather_icon'] = raw_icon
         return current_parsed
 
     def _prepare_current_weather_display_strings(self):
@@ -110,7 +152,7 @@ class WeatherData:
                    hasattr(day_data_point_raw, 'sunrise') and day_data_point_raw.sunrise and \
                    hasattr(day_data_point_raw, 'sunset') and day_data_point_raw.sunset:
                     
-                    day_date_key = datetime.fromtimestamp(day_data_point_raw.dt, tz=timezone.utc).date()
+                    day_date_key = datetime.fromtimestamp(day_data_point_raw.dt, tz=timezone.utc).astimezone(self.tz).date()
                     daily_sun_events_map[day_date_key] = (day_data_point_raw.sunrise, day_data_point_raw.sunset)
 
         hours_to_display = self.graph_config.get('graph_time_range_hours', 24)
@@ -126,7 +168,7 @@ class WeatherData:
                 # print(f"Warning: Skipping hourly data point with invalid timestamp {dt_val}")
                 continue
 
-            dt_obj = datetime.fromtimestamp(dt_val, tz=timezone.utc)
+            dt_obj = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(self.tz)
             
             if dt_obj.year <= 1970: # Filter out placeholder/invalid timestamps
                 # print(f"Warning: Skipping hourly data point with year <= 1970: {dt_obj}")

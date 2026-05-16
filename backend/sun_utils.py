@@ -16,7 +16,7 @@ def get_night_intervals(lat, lon, start_dt, end_dt, mode="civil_twilight"):
     Returns:
         list of tuples: [(interval_start, interval_end), ...]
     """
-    city = LocationInfo("Custom", "Region", "Timezone", lat, lon)
+    city = LocationInfo("Custom", "Region", "UTC", lat, lon)
     
     intervals = []
     
@@ -43,14 +43,14 @@ def get_night_intervals(lat, lon, start_dt, end_dt, mode="civil_twilight"):
             # Astral's 'dusk' is civil dusk. 'dawn' is civil dawn.
             
             # Let's define "night interval" for Day D as:
-            #   Start: s['dusk'] (Civil Dusk)
-            #   End:   sun(day+1)['dawn'] (Civil Dawn of next day)
+            #   Start: s['sunset']
+            #   End:   sun(day+1)['sunrise']
             
-            dusk = s['dusk']
+            dusk = s['sunset']
             
-            # Get next day's dawn
+            # Get next day's sunrise
             s_next = sun(city.observer, date=current_date + datetime.timedelta(days=1))
-            dawn_next = s_next['dawn']
+            dawn_next = s_next['sunrise']
             
             # Clip the interval to the requested start/end range
             # If the night interval assumes timezone info (astral returns tz-aware if observer has it, 
@@ -66,8 +66,11 @@ def get_night_intervals(lat, lon, start_dt, end_dt, mode="civil_twilight"):
             # If dusk/dawn are timezone naive or different, we must match.
             # Astral defaults to UTC.
             
-            interval_start = dusk
-            interval_end = dawn_next
+            local_tz = start_dt.tzinfo or datetime.timezone.utc
+            interval_start = dusk.astimezone(local_tz)
+            interval_end = dawn_next.astimezone(local_tz)
+            
+            print(f"DEBUG sun_utils: Date {current_date} | Sunset (start): {interval_start} | Sunrise next (end): {interval_end}")
             
             # Check overlap with [start_dt, end_dt]
             if interval_start < end_dt and interval_end > start_dt:

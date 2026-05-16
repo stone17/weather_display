@@ -91,6 +91,7 @@ def transform_open_meteo_data(om_json, lat, lon):
         current_desc = get_wmo_code_description(current.get('weather_code', 0))
         transformed_data['current'] = {
             'dt': current_ts, 'sunrise': 0, 'sunset': 0, 'temp': current_temp,
+            'timezone': tz_name, 'timezone_offset': tz_offset,
             'feels_like': current.get('apparent_temperature'),
             'pressure': current.get('pressure_msl', 1013), 'humidity': current.get('relative_humidity_2m', 50),
             'dew_point': 0, 'uvi': 0, 'clouds': current.get('cloud_cover', 50), 'visibility': 10000,
