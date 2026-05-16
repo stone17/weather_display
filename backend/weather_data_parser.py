@@ -29,8 +29,8 @@ class WeatherData:
             try:
                 import zoneinfo
                 return zoneinfo.ZoneInfo(tz_name)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Warning: Could not load timezone {tz_name} (tzdata missing?). Fallback to local/offset.")
                 
         if tz_offset is not None:
             return timezone(timedelta(seconds=tz_offset))

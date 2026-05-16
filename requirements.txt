@@ -11,3 +11,4 @@ uvicorn
 jinja2
 python-multipart
 paho-mqtt
+tzdata

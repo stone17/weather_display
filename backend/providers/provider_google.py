@@ -79,7 +79,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
         return None
     current_raw = google_raw_data.get('current', {}); hourly_raw = google_raw_data.get('hourly', {}); daily_raw = google_raw_data.get('daily', {})
     tz_name = daily_raw.get('timeZone', {}).get('id') or current_raw.get('timeZone', {}).get('id', 'UTC')
-    transformed_data = {'lat': lat, 'lon': lon, 'timezone': tz_name, 'timezone_offset': 0,
+    transformed_data = {'lat': lat, 'lon': lon, 'timezone': tz_name, 'timezone_offset': None,
                         'current': {}, 'hourly': [], 'daily': []}
     cc = current_raw
     current_ts = parse_iso_time(cc.get('currentTime')) or int(datetime.now(timezone.utc).timestamp())
@@ -89,7 +89,7 @@ def transform_google_weather_data(google_raw_data, lat, lon):
     owm_icon = get_owm_icon_from_google_code(condition_code, cc.get('isDaytime', True))
     transformed_data['current'] = {
         'dt': current_ts, 'sunrise': 0, 'sunset': 0, 'temp': temp,
-        'timezone': tz_name, 'timezone_offset': 0,
+        'timezone': tz_name, 'timezone_offset': None,
         'feels_like': cc.get('feelsLikeTemperature', {}).get('degrees'),
         'pressure': cc.get('airPressure', {}).get('meanSeaLevelMillibars', 1013.0),
         'humidity': cc.get('relativeHumidity', 50), 'dew_point': cc.get('dewPoint', {}).get('degrees', 0.0),
