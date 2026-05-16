@@ -7,6 +7,7 @@ import aiohttp
 from typing import Optional, List
 from contextlib import asynccontextmanager
 from datetime import datetime
+from collections import deque
 
 from fastapi import FastAPI, Request, Form, UploadFile, File
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
@@ -39,6 +40,20 @@ from config_manager import ConfigManager
 # --- LOGGING SETUP ---
 logging.basicConfig(level=logging.INFO, format='%(asctime)s [%(levelname)s] %(message)s')
 logger = logging.getLogger("WeatherDocker")
+
+class MemoryLogHandler(logging.Handler):
+    def __init__(self, maxlen=50):
+        super().__init__()
+        self.logs = deque(maxlen=maxlen)
+    def emit(self, record):
+        self.logs.appendleft({
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "level": record.levelname,
+            "message": record.getMessage()
+        })
+
+memory_log_handler = MemoryLogHandler()
+logger.addHandler(memory_log_handler)
 
 flash_message = None
 CONFIG_FILE = os.getenv("CONFIG_PATH", os.path.join(PROJECT_ROOT, "config", "config.yaml"))
@@ -176,6 +191,8 @@ async def home(request: Request):
     g_conf = cfg.data.get('graph_24h_forecast_config', {})
     active_series = [s.get('parameter') for s in g_conf.get('series', [])] if g_conf else []
 
+    has_errors = any(log['level'] in ['ERROR', 'CRITICAL'] for log in memory_log_handler.logs)
+
     return templates.TemplateResponse(
         request=request,
         name="index.html", 
@@ -183,7 +200,9 @@ async def home(request: Request):
             "request": request, "config": cfg.data, 
             "providers": ["smhi", "owm", "open-meteo", "meteomatics", "google", "aqicn"], 
             "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg,
-            "photos": photos, "active_graph_series": active_series
+            "photos": photos, "active_graph_series": active_series,
+            "recent_logs": list(memory_log_handler.logs),
+            "has_errors": has_errors
         }
     )
 

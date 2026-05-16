@@ -81,6 +81,29 @@
             </div>
         </div>
 
+        <div class="card shadow-sm mt-4 border-{% if has_errors %}danger{% else %}secondary{% endif %}">
+            <div class="card-header py-2 d-flex justify-content-between align-items-center bg-{% if has_errors %}danger text-white{% else %}light{% endif %}">
+                <span><i class="bi bi-journal-text"></i> System Logs</span>
+                <button class="btn btn-sm btn-outline-{% if has_errors %}light{% else %}secondary{% endif %} py-0" type="button" data-bs-toggle="collapse" data-bs-target="#logsCollapse">Toggle</button>
+            </div>
+            <div class="collapse {% if has_errors %}show{% endif %}" id="logsCollapse">
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.85rem;">
+                        {% if recent_logs %}
+                            {% for log in recent_logs %}
+                                <div class="list-group-item py-1 px-2 {% if log.level == 'ERROR' or log.level == 'CRITICAL' %}list-group-item-danger{% elif log.level == 'WARNING' %}list-group-item-warning{% endif %}">
+                                    <span class="text-muted me-2">[{{ log.time }}]</span>
+                                    <strong>{{ log.level }}:</strong> {{ log.message }}
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <div class="list-group-item py-2 text-muted text-center">No recent logs.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
     </div>
 
 </div>

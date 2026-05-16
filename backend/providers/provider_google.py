@@ -3,8 +3,11 @@ import json
 from datetime import datetime, timezone
 import traceback
 import aiohttp
+import logging
 
 from weather_provider_base import WeatherProvider, parse_iso_time, parse_google_date, HourlyDataPoint, DailyDataPoint
+
+logger = logging.getLogger("WeatherService")
 
 # --- Google Weather Condition Mappings ---
 GOOGLE_CONDITION_TO_OWM_ICON = {
@@ -193,8 +196,8 @@ class GoogleWeatherProvider(WeatherProvider):
             raise ValueError("Google Maps Platform API key is required.")
 
     async def _fetch_from_api(self):
-        print(f"Fetching data from {self.provider_name}...")
-        print("!!! WARNING: Google Weather API usage may incur costs. !!!")
+        logger.info(f"Fetching data from {self.provider_name}...")
+        logger.warning("!!! WARNING: Google Weather API usage may incur costs. !!!")
         base_lookup_params = {"key": self.api_key, "location.latitude": self.lat, "location.longitude": self.lon}
         raw_data = {}
         endpoint_paths = {'current': '/currentConditions:lookup', 'hourly': '/forecast/hours:lookup', 'daily': '/forecast/days:lookup'}
@@ -205,26 +208,26 @@ class GoogleWeatherProvider(WeatherProvider):
                 request_params = base_lookup_params.copy()
                 if key == 'hourly': request_params['hours'] = 48
                 elif key == 'daily': request_params['days'] = 8
-                print(f"Requesting {key} data from Google: {url} with params: {request_params}")
-                response = None
+                logger.info(f"Requesting {key} data from Google: {url}")
                 try:
                     async with session.get(url, params=request_params, timeout=30) as response:
-                        print(f"Google {key} Response Status Code: {response.status}")
-                        response.raise_for_status()
+                        logger.info(f"Google {key} Response Status Code: {response.status}")
+                        if response.status != 200:
+                            error_text = await response.text()
+                            logger.error(f"Google API Error ({response.status}): {error_text}")
+                            response.raise_for_status()
                         raw_data[key] = await response.json()
-                        print(f"Google {key} data fetched successfully.")
+                        logger.info(f"Google {key} data fetched successfully.")
                 except aiohttp.ClientError as e:
-                    print(f"Error fetching Google {key} data: {e}")
-                    if response: print(f"Response Body: {await response.text()}")
+                    logger.error(f"Error fetching Google {key} data: {e}")
                     success = False; break
                 except json.JSONDecodeError as e:
-                    print(f"Error decoding Google {key} JSON response: {e}")
-                    if response: print(f"Response Text: {await response.text()}")
+                    logger.error(f"Error decoding Google {key} JSON response: {e}")
                     success = False; break
                 except Exception as e:
-                    print(f"An unexpected error occurred during Google {key} fetch: {e}")
-                    traceback.print_exc(); success = False; break
+                    logger.error(f"An unexpected error occurred during Google {key} fetch: {e}")
+                    success = False; break
         if not success: return None
-        if 'current' not in raw_data: print("Error: Current conditions data missing from Google response."); return None
+        if 'current' not in raw_data: logger.error("Error: Current conditions data missing from Google response."); return None
         raw_data.setdefault('hourly', {}); raw_data.setdefault('daily', {})
         return transform_google_weather_data(raw_data, self.lat, self.lon)

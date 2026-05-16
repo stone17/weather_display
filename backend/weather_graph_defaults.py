@@ -31,5 +31,9 @@ GRAPH_SERIES_DEFAULTS = {
     'pressure': {
         'parameter': 'pressure', 'axis': 'right', 'color': 'purple', 
         'legend_label': 'hPa', 'line_style': 'dashdot', 'linewidth': 1
+    },
+    'uvi': {
+        'parameter': 'uvi', 'axis': 'right', 'color': 'orange', 
+        'legend_label': 'UV', 'line_style': 'solid', 'linewidth': 1.5
     }
 }

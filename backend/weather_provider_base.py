@@ -1,11 +1,14 @@
 import json
 import os
+import logging
 from datetime import datetime, timedelta, timezone
 from abc import ABC, abstractmethod
 import traceback
 import aiohttp
 from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field, asdict, is_dataclass
+
+logger = logging.getLogger("WeatherService")
 
 # --- Constants ---
 CACHE_DURATION_MINUTES = 60
@@ -127,11 +130,11 @@ class WeatherProvider(ABC):
                 weather_data['hourly'] = [HourlyDataPoint(**h) for h in weather_data.get('hourly', [])]
                 weather_data['daily'] = [DailyDataPoint(**d) for d in weather_data.get('daily', [])]
                 self._data = weather_data
-                print(f"Using cached data for {self.provider_name}.")
+                logger.info(f"Using cached data for {self.provider_name}.")
                 return True
             return False
         except Exception as e:
-            print(f"Cache load error {self.provider_name}: {e}")
+            logger.error(f"Cache load error {self.provider_name}: {e}")
             return False
 
     def _save_to_cache(self, data):
@@ -143,11 +146,11 @@ class WeatherProvider(ABC):
             serializable['daily'] = [asdict(d) if is_dataclass(d) else d for d in serializable.get('daily', [])]
             with open(self.cache_file, 'w') as f:
                 json.dump({'cached_provider_name': self.provider_name, 'weather_data': serializable}, f, indent=4)
-        except Exception as e: print(f"Cache save error: {e}")
+        except Exception as e: logger.error(f"Cache save error: {e}")
 
     def _merge_supplemental_data(self, supplemental_data, parameters):
         if not self._data or not supplemental_data: return
-        print(f"Merging {parameters} from supplemental...")
+        logger.info(f"Merging {parameters} from supplemental...")
         if 'current' in supplemental_data and 'current' in self._data:
             for p in parameters: 
                 if p in supplemental_data['current']: self._data['current'][p] = supplemental_data['current'][p]
@@ -168,23 +171,22 @@ class WeatherProvider(ABC):
 
     async def fetch_data(self):
         if self._is_cache_valid() and self._load_from_cache(): return True
-        print(f"Fetching API data for {self.provider_name}...")
+        logger.info(f"Fetching API data for {self.provider_name}...")
         try:
             data = await self._fetch_from_api()
             if data:
                 self._data = data
                 for sup in self.supplemental_providers_info:
-                    print(f"Fetching supplemental {sup['instance'].provider_name}...")
+                    logger.info(f"Fetching supplemental {sup['instance'].provider_name}...")
                     if await sup['instance'].fetch_data():
                         self._merge_supplemental_data(sup['instance'].get_all_data(), sup['parameters'])
                 self._save_to_cache(self._data)
                 return True
             else:
-                print(f"API fetch failed. Fallback to cache.")
+                logger.warning(f"API fetch failed. Fallback to cache.")
                 return self._load_from_cache()
         except Exception as e:
-            print(f"Fetch loop error: {e}")
-            traceback.print_exc()
+            logger.error(f"Fetch loop error: {e}")
             return False
 
     def get_current_data(self): return self._data.get('current') if self._data else None
@@ -207,7 +209,7 @@ def get_weather_provider(config, project_root_path_from_caller):
     lat = config.get("latitude")
     lon = config.get("longitude")
 
-    print(f"DEBUG FACTORY: lat: {lat}, lon: {lon}")
+    logger.debug(f"DEBUG FACTORY: lat: {lat}, lon: {lon}")
 
     if lat is None or lon is None:
         raise ValueError("Latitude and Longitude must be defined in config.")
@@ -253,6 +255,5 @@ def get_weather_provider(config, project_root_path_from_caller):
             
         return provider
     except Exception as e:
-        print(f"Provider Init Error: {e}")
-        traceback.print_exc()
+        logger.error(f"Provider Init Error: {e}")
         return None
