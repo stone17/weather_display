@@ -1,6 +1,6 @@
-# ESP32 Weather Display with Waveshare 5.65-inch e-Paper
+# ESP32 E-Paper Weather Display & Photo Frame
 
-This project displays weather information on a Waveshare 5.65-inch e-Paper display connected to an ESP32. It fetches weather data from various providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, AQICN), generates an image with the forecast, and uploads it to the ESP32 for display.
+This project displays weather information and photos on e-Paper displays (like Waveshare 5.65"/7.3" 7-color and reTerminal 1002 Spectra E6) connected to an ESP32. It fetches weather data from various providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, AQICN), generates an image with the forecast, applies advanced dithering, and uploads it to the ESP32 for display. Configuration is now managed through a convenient Web UI.
 
 ## Features
 
@@ -18,6 +18,11 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 * Asynchronous data fetching for improved performance.
 * Optimized for 7-color e-Paper displays.
 * Configurable display details for current weather and daily forecast sections.
+* **Web UI:** Easy configuration of providers, display settings, and graph appearance through a browser.
+* **Photo Frame Mode:** Interleave weather forecasts with personal photos.
+* **Multiple Display Drivers:** Support for standard Waveshare 7-color displays and reTerminal E6 with strict hardware color mapping.
+* **Advanced Dithering:** Custom error diffusion and ordered dithering algorithms for optimal image quality on e-ink.
+* **MQTT & Home Assistant:** Integration for status reporting and control (reTerminal firmware).
 
 <div align="center">
   <img src="images/weather.png" alt="Weather Display" />
@@ -30,10 +35,12 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 ## Hardware Requirements
 
 * ESP32 development board
-* Waveshare 5.65-inch e-Paper (F) display
-* Jumper wires
+* Supported E-Paper Displays:
+    * Waveshare 5.65-inch or 7.3-inch 7-Color (F) display
+    * reTerminal 1002 Spectra E6
+* Jumper wires (if using bare Waveshare module)
 
-**Pin Connections (ESP32 to Waveshare 5.65-inch e-Paper):**
+**Pin Connections (ESP32 to Waveshare e-Paper):**
 
 *   VCC  - 3V3
 *   GND  - GND
@@ -69,10 +76,12 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
 ## Setup
 
 1.  **Configure ESP32:**
-      *   You'll need to install the ESP32 Arduino core and the e-Paper driver library. Detailed instructions can be found on the Waveshare e-Paper Wiki.
-      *   Connect the wires as shown in the diagram above.
-      *   Once the above linked firmware is downloaded and unpacked, the `.ino` file can be found in the `Loader_esp32wf` directory  
-      *   You need to edit the `srvr.h` file to update your WiFi credentials:
+      *   You'll need to install the ESP32 Arduino core and the relevant e-Paper driver libraries.
+      *   Connect the wires as shown in the diagram above (for Waveshare displays).
+      *   Choose the appropriate firmware from the `esp32fw/` directory:
+          *   `esp32fw/waveshare_epd5in65f/`: For standard Waveshare HTTP upload.
+          *   `esp32fw/reterminal_1002/`: For reTerminal E6 with MQTT support.
+      *   For Waveshare, edit the `srvr.h` file to update your WiFi credentials:
           ```c
           const char *ssid = "your ssid";
           const char *password = "your password";
@@ -88,185 +97,24 @@ This project displays weather information on a Waveshare 5.65-inch e-Paper displ
           ```
       *   After these modifications, flash the firmware. This creates a web interface on the ESP32 that allows uploading images. Note the IP address assigned to your ESP32. The assigned IP address is printed in the Arduino IDE serial monitor. Navigate to the address and verify that the server is up and running.
 
-2.  **Configure Python Script:**
-    *   **Obtain Credentials:** Get the necessary API keys or credentials for the weather data provider(s) you intend to use:
-        *   **OpenWeatherMap:** API Key for One Call API 3.0.
-        *   **Open-Meteo:** No key required.
-        *   **Meteomatics:** Username and Password.
-        *   **SMHI:** No key required (uses `pysmhi` library).
-        *   **Google Weather:** Google Cloud Platform API Key with Weather API enabled (Note: This is a paid service).
-        *   **AQICN:** API Token for Air Quality Index data.
-    *   **Create `config.yaml`:** Create a file named `config.yaml` in the same directory as the Python scripts. Use the example below and fill in your details:
-
-        ```yaml
-        latitude: YOUR_LATITUDE
-        longitude: YOUR_LONGITUDE
-        server_ip: "YOUR_ESP32_IP_ADDRESS" # Leave empty ("") if not uploading
-        weather_provider: "smhi" # "openweathermap", "open-meteo", "meteomatics", "google", or "smhi"
-        icon_provider_display: "openweathermap" # For current/daily icons. Options: "openweathermap", "google", "meteomatics"
-        icon_provider_graph: "meteomatics"      # For graph icons. Options: "openweathermap", "google", "meteomatics"
-        temperature_unit: "C" # "C" or "F"
-        
-        provider_list:
-          - "open-meteo"
-          - "openweathermap"
-          - "meteomatics"
-          - "google"
-          - "smhi"
-          - "aqicn"
-        icon_provider_list:
-          - "openweathermap"
-          - "google"
-          - "meteomatics"
-
-        cache_duration_minutes: 10 # Optional, defaults to 60
-        
-        # Configuration for what details to show in the "Current Weather" panel
-        current_weather_display_details:
-          - "feels_like" # Options: "feels_like", "humidity", "wind_speed", "aqi"
-          - "humidity"
-          - "wind_speed"
-          - "aqi"
-        
-        # Configuration for what details to show for each day in the "Daily Forecast"
-        daily_forecast_display_details:
-          - "temp"      # Shows Max/Min temperature. Options: "temp", "rain", "wind", "uvi", "aqi_pm25"
-          - "rain"
-          - "wind"      # Shows wind speed
-          - "uvi"
-          - "aqi_pm25"  # Shows PM2.5 average for the day
-
-        # API Keys - only fill for providers you use
-        google_api_key: "YOUR_GOOGLE_CLOUD_API_KEY"
-        openweathermap_api_key: "YOUR_OPENWEATHERMAP_API_KEY"
-        meteomatics_username: "YOUR_METEOMATICS_USERNAME"
-        meteomatics_password: "YOUR_METEOMATICS_PASSWORD"
-        aqicn_api_token: "YOUR_AQICN_TOKEN_HERE"
-        ```
-    *   **Configuration Details:**
-        *   `latitude`, `longitude`: Your location.
-        *   `server_ip`: The IP address of your ESP32 running the web server firmware. Leave empty (`""`) if not uploading.
-        *   `weather_provider`: Choose the source for weather data: `"openweathermap"`, `"open-meteo"`, `"meteomatics"`, or `"google"`.
-        *   `icon_provider_display`: Choose the icon source for current weather and daily forecast sections (e.g., "openweathermap", "google", "meteomatics").
-        *   `icon_provider_graph`: Choose the icon source for the 24-hour graph (e.g., "openweathermap", "google", "meteomatics").
-        *   `temperature_unit`: "C" for Celsius or "F" for Fahrenheit.
-        *   Fill in the corresponding API key/credentials for your chosen `weather_provider`. Keys for unused providers can be left blank or as placeholders.
-                *   `cache_duration_minutes`: (Integer, optional) How long the weather data cache is considered fresh, in minutes. Defaults to `60` if not specified.
-
-    *   **Supplemental Providers (Optional):**
-        You can configure the script to fetch specific data points from providers other than your primary `weather_provider` and merge them into the main dataset. This is useful if your primary provider lacks certain parameters (like UV index from SMHI's point forecast).
-
-        Add a `supplemental_providers` key to your `config.yaml`. This should be a list of mappings, each specifying a `provider_name` and a list of `parameters` to merge.
-
-        Example:
-        ```yaml
-        # ... your primary config here ...
-        
-        supplemental_providers:
-          - provider_name: "open-meteo"
-            parameters:
-              - "uvi"
-              - "rain"
-          - provider_name: "AQICN"
-            parameters:
-              - "aqi" # For current AQI
-              - "dominant_pollutant" # For current dominant pollutant
-              - "aqi_pm25_avg" # For daily PM2.5 average forecast
-        # Ensure you have credentials for these supplemental providers configured above
-        # if they require authentication (e.g., google_api_key for "google").
-        ```
-
-        **Available Parameters for Merging:**
-        Common parameters you can list in the `"parameters"` array include: `"temp"`, `"feels_like"`, `"humidity"`, `"uvi"`, `"wind_speed"`, `"wind_gust"`, `"weather"`, `"rain"`, `"snow"`, `"summary"`, `"aqi"`, `"dominant_pollutant"`, `"aqi_pm25_avg"`.
-        Note that the supplemental provider must actually provide data for the parameters you list. Merging replaces the entire value for that parameter (including nested dictionaries/lists like `temp` for daily or `weather`).
-
-3.  **Install Requirements:**
+2.  **Install Requirements:**
     *   Open a terminal or command prompt in the project directory.
     *   Run: `pip install -r requirements.txt`
-4.  **Run the Script:**
-    *   Execute `python create_weather_info.py`. This will fetch weather data (using cache if available), create the `weather_forecast_graph.png` image, and attempt to upload it to your ESP32 if `server_ip` is configured.
-    *   By default, the script will look for `config.yaml` in the same directory as `create_weather_info.py`.
-    *   You can specify a custom path to your configuration file using the `--config` argument:
+
+3.  **Run the Application & Configure via Web UI:**
+    *   Start the backend server using Uvicorn (FastAPI):
         ```bash
-        python /path/to/your/weather_display/create_weather_info.py --config /path/to/your/custom_config.yaml
+        uvicorn app.main:app --host 0.0.0.0 --port 8000
         ```
-
-5.  **Configuring the 24-Hour Forecast Graph (Optional):**
-    The appearance and content of the 24-hour forecast graph can be extensively customized within your `config.yaml` file under the `graph_24h_forecast_config` key.
-
-    Here's an example snippet showcasing some common configurations:
-
-    ```yaml
-    # In your config.yaml
-    graph_24h_forecast_config:
-      # --- General Graph Appearance ---
-      base_font_size: 10
-      show_y_grid_left: false
-      show_y_grid_right: true
-      graph_time_range_hours: 24
-
-      # --- X-Axis Configuration ---
-      x_axis_hour_interval: 6
-      x_axis_time_format: "%H" # e.g., "18" for 6 PM
-
-      # --- Legend Configuration ---
-      legend:
-        peak_value_display: # Displays max/min values directly on the graph
-          enabled: true
-          location: "in_graph"
-          start_anchor_y: 0.97
-          font_size: 9
-          line_y_step: 0.075
-
-      # --- Wind Arrow Configuration (on graph) ---
-      wind_arrows:
-        enabled: true
-        color: "darkgreen"
-        size: 12
-
-      # --- Series Configuration (lines on the graph) ---
-      series:
-        - parameter: "temp"
-          axis_label: "Temp (°C)"
-          axis: "right"
-          color: "#FF6347" # Tomato red
-          scale_type: "auto_padded"
-          data_occupancy_factor: 0.8
-        - parameter: "wind_speed"
-          legend_label: "Wind"
-          axis: "left"
-          color: "#32CD32" # Lime green
-          show_peak_in_legend: true # If peak_value_display is enabled
-          unit: "m/s"
-          scale_type: "manual_range"
-          y_axis_min: 0
-          y_axis_max: 20
-        - parameter: "rain"
-          legend_label: "Rain"
-          axis: "left"
-          color: "#1E90FF" # Dodger blue
-          plot_type: "fill_between" # Creates a filled area for rain
-          alpha: 0.4
-          scale_type: "manual_range"
-          y_axis_min: 0
-          y_axis_max: 10
-    ```
-
-    **Key `graph_24h_forecast_config` options:**
-    *   `base_font_size`: Controls the general font size for graph elements.
-    *   `graph_time_range_hours`: How many hours the graph should display.
-    *   `x_axis_hour_interval`, `x_axis_time_format`: Customize X-axis time ticks and labels.
-    *   `legend`: Configure either a standard legend or a `peak_value_display` that shows min/max values directly on the graph.
-    *   `wind_arrows`: Enable and style wind direction arrows on the graph.
-    *   `series`: A list defining each data series (line) to plot.
-        *   `parameter`: The weather data parameter (e.g., "temp", "wind_speed", "rain").
-        *   `axis_label`: Label for the Y-axis this series uses.
-        *   `axis`: Assigns the series to the "left" or "right" Y-axis.
-        *   `color`, `line_style`, `linewidth`: Visual styling.
-        *   `scale_type`: How the Y-axis for this series is scaled (`auto_padded` or `manual_range`).
-        *   `plot_type`: Can be set to `fill_between` for parameters like "rain" or "snow" to create an area fill.
-
-    Refer to the `config.defaults.yaml` (if available) or the full example in `config.yaml` for all available options and detailed comments.
+    *   Open your web browser and navigate to `http://localhost:8000`.
+    *   **Configuration is now entirely managed through the Web UI.** You no longer need to manually edit a `config.yaml` file.
+    *   Use the UI to:
+        *   Set your location (Latitude/Longitude).
+        *   Enter API keys for your chosen weather providers.
+        *   Select primary and supplemental weather providers.
+        *   Configure the ESP32 IP address or MQTT settings for image upload.
+        *   Customize the 24-hour forecast graph appearance, series, and colors.
+        *   Manage Photo Frame mode settings and upload photos.
 
 
 ## Weather Provider Parameter Support
@@ -295,18 +143,16 @@ This table summarizes the weather parameters supported by each provider. Note th
 
 ## Customization
 
-*   **Providers:** Select your preferred `weather_provider`, `icon_provider_display`, and `icon_provider_graph` in `config.yaml`.
-*   **Font:** Change the `font_path` variables in `create_weather_info.py` to use different TrueType fonts.
-*   **Colors:** Modify the color value tuples (RGB) in `create_weather_info.py` to customize the display's appearance.
-*   **Display:** Adjust the image processing and upload code in `upload.py` to support different e-Paper display models or upload methods.
-*   **Displayed Details:** Modify `current_weather_display_details` and `daily_forecast_display_details` in `config.yaml` to choose what information is shown.
+*   **Web UI:** Almost all customization (Providers, Displayed Details, Graph Colors, etc.) is now done directly through the Web UI.
+*   **Font:** Change the `font_path` variables in the backend code to use different TrueType fonts.
+*   **Display:** Adjust the image processing and upload code in `backend/upload.py` or `backend/display_drivers.py` to support different e-Paper display models or upload methods.
 
 ## Troubleshooting
 
-*   **Display Issues:** Double-check the wiring between the ESP32 and the e-Paper display. Ensure the correct Waveshare firmware is flashed and running.
-*   **Network Errors:** Verify your ESP32 is connected to your WiFi network. Confirm the `server_ip` in `config.yaml` matches the ESP32's actual IP address. Check firewall settings if applicable.
+*   **Display Issues:** Double-check the wiring between the ESP32 and the e-Paper display. Ensure the correct firmware is flashed and running.
+*   **Network Errors:** Verify your ESP32 is connected to your WiFi network. Confirm the ESP32 IP address in the Web UI matches the ESP32's actual IP address. Check firewall settings if applicable.
 *   **API Errors:**
-    *   Verify the API key/credentials in `config.yaml` for your selected `weather_provider` are correct and active.
+    *   Verify the API key/credentials in the Web UI for your selected weather providers are correct and active.
     *   Check the script output for specific error messages from the provider (e.g., 401 Unauthorized, 403 Forbidden, 429 Rate Limit).
     *   Consult the documentation for your chosen weather provider regarding API limits and potential costs (especially Google Weather).
     *   Check the status page of the weather provider if errors persist.
