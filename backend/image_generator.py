@@ -815,6 +815,8 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
     current_icon_display_map = icon_configs_all.get('current_display', DEFAULT_ICON_DISPLAY_CONFIGS['current_display'])
     current_icon_props = current_icon_display_map.get(display_icon_provider_pref, current_icon_display_map['default'])
     
+    show_sun_times = app_config.get('show_sunrise_sunset', False)
+
     owm_icon_code_current = weather_data.current.get('weather_icon')
     if owm_icon_code_current and owm_icon_code_current != 'na':
         icon_path = download_and_cache_icon(owm_icon_code_current, display_icon_provider_pref, project_root_path, icon_cache_dir=icon_cache_path)
@@ -826,6 +828,18 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
                 if icon_img:
                     icon_img_resized = icon_img.resize(target_size, resample=LANCZOS_FILTER)
                     image_canvas.paste(icon_img_resized, paste_pos, mask=icon_img_resized)
+                    
+                    if show_sun_times:
+                        lat = app_config.get('latitude')
+                        lon = app_config.get('longitude')
+                        if lat is not None and lon is not None:
+                            sunrise_str, sunset_str = sun_utils.get_sunrise_sunset_times(lat, lon, tzinfo=weather_data.tz)
+                            sun_x = paste_pos[0] + target_size[0] + 5
+                            sun_y_start = paste_pos[1] + (target_size[1] // 2) - 23
+                            if sunrise_str:
+                                draw_context.text((sun_x, sun_y_start), f"↑ {sunrise_str}", font=fonts['small'], fill=colors['text'])
+                            if sunset_str:
+                                draw_context.text((sun_x, sun_y_start + 20), f"↓ {sunset_str}", font=fonts['small'], fill=colors['text'])
             except Exception: pass
 
     # Draw Current Details

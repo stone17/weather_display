@@ -2,6 +2,25 @@ import datetime
 from astral import LocationInfo
 from astral.sun import sun
 
+def get_sunrise_sunset_times(lat, lon, target_date=None, tzinfo=None):
+    """
+    Calculates the sunrise and sunset times for a given location and date.
+    """
+    if target_date is None:
+        target_date = datetime.date.today()
+        
+    city = LocationInfo("Custom", "Region", "UTC", lat, lon)
+    try:
+        s = sun(city.observer, date=target_date)
+        sunrise = s['sunrise']
+        sunset = s['sunset']
+        if tzinfo:
+            sunrise = sunrise.astimezone(tzinfo)
+            sunset = sunset.astimezone(tzinfo)
+        return sunrise.strftime('%H:%M'), sunset.strftime('%H:%M')
+    except Exception:
+        return None, None
+
 def get_night_intervals(lat, lon, start_dt, end_dt, mode="civil_twilight"):
     """
     Calculates night intervals (between dusk and dawn) for the given timeframe.

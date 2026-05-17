@@ -45,6 +45,7 @@ openweathermap_api_key: YOUR_OPENWEATHERMAP_API_KEY_HERE
 meteomatics_username: YOUR_METEOMATICS_USERNAME_HERE
 meteomatics_password: YOUR_METEOMATICS_PASSWORD_HERE
 aqicn_api_token: YOUR_AQICN_TOKEN_HERE
+show_sunrise_sunset: false
 current_weather_display_details:
 - feels_like
 - humidity
