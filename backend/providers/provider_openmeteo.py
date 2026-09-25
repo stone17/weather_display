@@ -170,7 +170,8 @@ def transform_open_meteo_data(om_json, lat, lon):
             temp_max = get_daily_val('temperature_2m_max', i, 0.0)
             temp_min = get_daily_val('temperature_2m_min', i, 0.0)
             weather_code = get_daily_val('weather_code', i, 0)
-            daily_icon = get_owm_icon_from_wmo_code(weather_code, 1)
+            daily_icon_day = get_owm_icon_from_wmo_code(weather_code, 1)
+            daily_icon_night = get_owm_icon_from_wmo_code(weather_code, 0)
             daily_desc = get_wmo_code_description(weather_code)
             pop_max_val = get_daily_val('precipitation_probability_max', i)
 
@@ -194,7 +195,9 @@ def transform_open_meteo_data(om_json, lat, lon):
                 weather_id=weather_code,
                 weather_main=daily_desc.split()[0] if daily_desc else "Unknown",
                 weather_description=daily_desc,
-                weather_icon=daily_icon,
+                weather_icon=daily_icon_day,
+                weather_icon_day=daily_icon_day,
+                weather_icon_night=daily_icon_night,
                 # clouds not directly requested for daily
                 pop=pop_max_val / 100.0 if pop_max_val is not None else None,
                 rain=get_daily_val('precipitation_sum', i, 0.0),

@@ -52,6 +52,8 @@ class HourlyDataPoint:
     weather_main: Optional[str] = None
     weather_description: Optional[str] = None
     weather_icon: Optional[str] = None
+    weather_icon_day: Optional[str] = None
+    weather_icon_night: Optional[str] = None
     pop: Optional[float] = None
     rain_1h: Optional[float] = None
     snow_1h: Optional[float] = None
@@ -90,6 +92,8 @@ class DailyDataPoint:
     weather_main: Optional[str] = None
     weather_description: Optional[str] = None
     weather_icon: Optional[str] = None
+    weather_icon_day: Optional[str] = None
+    weather_icon_night: Optional[str] = None
     clouds: Optional[int] = None
     pop: Optional[float] = None
     precipitation: Optional[float] = None

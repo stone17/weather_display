@@ -325,6 +325,7 @@ async def update_settings(
     request: Request,
     enable_mqtt: bool = Form(False), enable_server_push: bool = Form(False),
     show_sunrise_sunset: bool = Form(False),
+    daily_forecast_day_night: bool = Form(False),
     current_details: List[str] = Form([]), daily_details: List[str] = Form([]),
     graph_series: List[str] = Form([])
 ):
@@ -345,6 +346,7 @@ async def update_settings(
     data_dict['enable_mqtt'] = enable_mqtt
     data_dict['enable_server_push'] = enable_server_push
     data_dict['show_sunrise_sunset'] = show_sunrise_sunset
+    data_dict['daily_forecast_day_night'] = daily_forecast_day_night
     data_dict['current_weather_display_details'] = current_details
     data_dict['daily_forecast_display_details'] = daily_details
     data_dict['graph_series'] = graph_series

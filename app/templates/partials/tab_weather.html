@@ -159,6 +159,7 @@ function addSuppProvider() {
         <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="wind" id="day_wind" {% if 'wind' in daily %}checked{% endif %}><label class="form-check-label" for="day_wind">Wind</label></div>
         <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="uvi" id="day_uvi" {% if 'uvi' in daily %}checked{% endif %}><label class="form-check-label" for="day_uvi">UV</label></div>
         <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_details" value="aqi_pm25" id="day_aqi" {% if 'aqi_pm25' in daily %}checked{% endif %}><label class="form-check-label" for="day_aqi">AQI</label></div>
+        <div class="form-check form-check-inline small m-0"><input class="form-check-input" type="checkbox" name="daily_forecast_day_night" value="true" id="day_night_icons" {% if config.get('daily_forecast_day_night') %}checked{% endif %}><label class="form-check-label" for="day_night_icons">Day/Night Icons</label></div>
     </div>
 </div>
 

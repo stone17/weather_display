@@ -80,6 +80,8 @@ def transform_owm_data(raw_json_data: dict) -> Optional[dict]:
             weather_main=weather_info.get('main'),
             weather_description=weather_info.get('description'),
             weather_icon=weather_info.get('icon'),
+            weather_icon_day=(weather_info.get('icon')[:-1] + 'd') if weather_info.get('icon') and weather_info.get('icon').endswith('n') else weather_info.get('icon'),
+            weather_icon_night=(weather_info.get('icon')[:-1] + 'n') if weather_info.get('icon') and weather_info.get('icon').endswith('d') else weather_info.get('icon'),
             clouds=day_data.get('clouds'),
             pop=day_data.get('pop'),
             rain=day_data.get('rain', 0.0), # Default to 0.0 if 'rain' is missing

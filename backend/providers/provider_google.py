@@ -144,6 +144,12 @@ def transform_google_weather_data(google_raw_data, lat, lon):
         condition_code_d = active_fc.get('weatherCondition', {}).get('type', 'CONDITION_UNSPECIFIED')
         description_d = active_fc.get('weatherCondition', {}).get('description', {}).get('text', 'Unknown')
         owm_icon_d = get_owm_icon_from_google_code(condition_code_d, True) # Assume day for daily icon
+
+        condition_code_n = nighttime_fc.get('weatherCondition', {}).get('type', 'CONDITION_UNSPECIFIED') if nighttime_fc else None
+        owm_icon_n = get_owm_icon_from_google_code(condition_code_n, False) if condition_code_n and condition_code_n != 'CONDITION_UNSPECIFIED' else None
+        if not owm_icon_n and owm_icon_d:
+            owm_icon_n = owm_icon_d[:-1] + 'n' if owm_icon_d.endswith('d') else owm_icon_d
+
         precip_total_mm = daytime_fc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0) + \
                           nighttime_fc.get('precipitation', {}).get('qpf', {}).get('quantity', 0.0)
 
@@ -166,7 +172,9 @@ def transform_google_weather_data(google_raw_data, lat, lon):
             wind_gust=round(active_fc.get('wind', {}).get('gust', {}).get('value', 0.0) / 3.6, 2),
             weather_main=description_d.split()[0] if description_d else "Unknown",
             weather_description=description_d,
-            weather_icon=owm_icon_d,            
+            weather_icon=owm_icon_d or owm_icon_n,
+            weather_icon_day=owm_icon_d,
+            weather_icon_night=owm_icon_n,            
             clouds=active_fc.get('cloudCover', 50),
             pop=active_fc.get('precipitation', {}).get('probability', {}).get('percent', 0) / 100.0,
             rain=precip_total_mm,

@@ -34,6 +34,12 @@ DEFAULT_ICON_DISPLAY_CONFIGS = {
         "meteomatics": {"width": 100, "height": 100, "x_offset": -12, "y_offset": 5},
         "default": {"width": 80, "height": 80, "x_offset": -10, "y_offset": 10}
     },
+    "daily_display_day_night": {
+        "google": {"width": 38, "height": 38, "x_offset_day": 4, "x_offset_night": 46, "y_offset": 24},
+        "openweathermap": {"width": 55, "height": 55, "x_offset_day": -10, "x_offset_night": 35, "y_offset": 16},
+        "meteomatics": {"width": 55, "height": 55, "x_offset_day": -10, "x_offset_night": 35, "y_offset": 16},
+        "default": {"width": 45, "height": 45, "x_offset_day": -2, "x_offset_night": 40, "y_offset": 20}
+    },
     "current_display": {
         "google": {"width": 90, "height": 90, "x_offset": 0, "y_offset": 45},
         "openweathermap": {"width": 100, "height": 100, "x_offset": -15, "y_offset": 35},
@@ -690,6 +696,10 @@ def create_daily_forecast_display(weather_data_daily, temperature_unit_pref, pro
     daily_icon_display_map = icon_configs_all.get('daily_display', DEFAULT_ICON_DISPLAY_CONFIGS['daily_display'])
     icon_props = daily_icon_display_map.get(icon_provider_preference, daily_icon_display_map['default'])
     
+    show_day_night = app_config.get('daily_forecast_day_night', False)
+    daily_dn_icon_display_map = icon_configs_all.get('daily_display_day_night', DEFAULT_ICON_DISPLAY_CONFIGS.get('daily_display_day_night', {}))
+    dn_icon_props = daily_dn_icon_display_map.get(icon_provider_preference, daily_dn_icon_display_map.get('default', {'width': 45, 'height': 45, 'x_offset_day': -2, 'x_offset_night': 40, 'y_offset': 20}))
+
     default_daily_details_config = ['temp', 'rain', 'wind', 'uvi', 'aqi_pm25']
     daily_details_to_show = app_config.get('daily_forecast_display_details', default_daily_details_config)
 
@@ -703,18 +713,49 @@ def create_daily_forecast_display(weather_data_daily, temperature_unit_pref, pro
         day_str = day_forecast.get('day_name', '???')
         draw_context.text((daily_x + 20, daily_start_y - 5), day_str, font=fonts['heading'], fill=colors['text'])
 
-        owm_icon_code = day_forecast.get('weather_icon')
-        if owm_icon_code and owm_icon_code != 'na':
-            icon_path = download_and_cache_icon(owm_icon_code, icon_provider_preference, project_root_path, icon_cache_dir=icon_cache_path)
-            if icon_path:
-                try:
-                    target_icon_size = (icon_props['width'], icon_props['height'])
-                    paste_pos = (daily_x + icon_props['x_offset'], daily_start_y + icon_props['y_offset'])
-                    icon_img = _load_image_from_path(icon_path)
-                    if icon_img:
-                        icon_img_resized = icon_img.resize(target_icon_size, resample=LANCZOS_FILTER)
-                        image_canvas.paste(icon_img_resized, paste_pos, mask=icon_img_resized)
-                except Exception: pass
+        if show_day_night:
+            target_icon_size = (dn_icon_props['width'], dn_icon_props['height'])
+            
+            # 1. Day icon
+            owm_icon_day = day_forecast.get('weather_icon_day') or day_forecast.get('weather_icon')
+            if owm_icon_day and owm_icon_day != 'na':
+                icon_path_day = download_and_cache_icon(owm_icon_day, icon_provider_preference, project_root_path, icon_cache_dir=icon_cache_path)
+                if icon_path_day:
+                    try:
+                        paste_pos_day = (daily_x + dn_icon_props['x_offset_day'], daily_start_y + dn_icon_props['y_offset'])
+                        icon_img_day = _load_image_from_path(icon_path_day)
+                        if icon_img_day:
+                            icon_img_day_resized = icon_img_day.resize(target_icon_size, resample=LANCZOS_FILTER)
+                            image_canvas.paste(icon_img_day_resized, paste_pos_day, mask=icon_img_day_resized)
+                    except Exception: pass
+
+            # 2. Night icon
+            owm_icon_night = day_forecast.get('weather_icon_night')
+            if not owm_icon_night and owm_icon_day and owm_icon_day != 'na':
+                owm_icon_night = (owm_icon_day[:-1] + 'n') if owm_icon_day.endswith('d') else owm_icon_day
+            if owm_icon_night and owm_icon_night != 'na':
+                icon_path_night = download_and_cache_icon(owm_icon_night, icon_provider_preference, project_root_path, icon_cache_dir=icon_cache_path)
+                if icon_path_night:
+                    try:
+                        paste_pos_night = (daily_x + dn_icon_props['x_offset_night'], daily_start_y + dn_icon_props['y_offset'])
+                        icon_img_night = _load_image_from_path(icon_path_night)
+                        if icon_img_night:
+                            icon_img_night_resized = icon_img_night.resize(target_icon_size, resample=LANCZOS_FILTER)
+                            image_canvas.paste(icon_img_night_resized, paste_pos_night, mask=icon_img_night_resized)
+                    except Exception: pass
+        else:
+            owm_icon_code = day_forecast.get('weather_icon')
+            if owm_icon_code and owm_icon_code != 'na':
+                icon_path = download_and_cache_icon(owm_icon_code, icon_provider_preference, project_root_path, icon_cache_dir=icon_cache_path)
+                if icon_path:
+                    try:
+                        target_icon_size = (icon_props['width'], icon_props['height'])
+                        paste_pos = (daily_x + icon_props['x_offset'], daily_start_y + icon_props['y_offset'])
+                        icon_img = _load_image_from_path(icon_path)
+                        if icon_img:
+                            icon_img_resized = icon_img.resize(target_icon_size, resample=LANCZOS_FILTER)
+                            image_canvas.paste(icon_img_resized, paste_pos, mask=icon_img_resized)
+                    except Exception: pass
 
         current_detail_y_pos = daily_start_y + 90 
         detail_text_x = daily_x + 10

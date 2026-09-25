@@ -86,6 +86,10 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
             temp_max = day_dict.get('temperature_max', day_dict.get('temperature', 0.0))
             temp_min = day_dict.get('temperature_min', day_dict.get('temperature', 0.0))
 
+            daily_icon = get_owm_icon_from_smhi_code(symbol)
+            daily_icon_day = (daily_icon[:-1] + 'd') if daily_icon and daily_icon.endswith('n') else daily_icon
+            daily_icon_night = (daily_icon[:-1] + 'n') if daily_icon and daily_icon.endswith('d') else daily_icon
+
             daily_point = DailyDataPoint(
                 dt=int(normalized_dt.timestamp()),
                 summary=description,
@@ -105,7 +109,9 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
                 weather_id=symbol,
                 weather_main=description.split()[0] if description else "Unknown",
                 weather_description=description,
-                weather_icon=get_owm_icon_from_smhi_code(symbol),
+                weather_icon=daily_icon,
+                weather_icon_day=daily_icon_day,
+                weather_icon_night=daily_icon_night,
                 clouds=day_dict.get('total_cloud', 50),
                 rain=day_dict.get('total_precipitation', 0.0)
             )

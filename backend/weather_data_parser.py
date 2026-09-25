@@ -222,7 +222,19 @@ class WeatherData:
             entry['day_name'] = datetime.fromtimestamp(dt_val).strftime('%a') if dt_val else '???'
 
             # Expecting OWM icon code directly from day_data.weather_icon
-            entry['weather_icon'] = getattr(day_data, 'weather_icon', None)
+            is_day_dict = isinstance(day_data, dict)
+            base_icon = day_data.get('weather_icon') if is_day_dict else getattr(day_data, 'weather_icon', None)
+            entry['weather_icon'] = base_icon
+            
+            icon_day = day_data.get('weather_icon_day') if is_day_dict else getattr(day_data, 'weather_icon_day', None)
+            icon_night = day_data.get('weather_icon_night') if is_day_dict else getattr(day_data, 'weather_icon_night', None)
+            if not icon_day and base_icon and base_icon != 'na':
+                icon_day = (base_icon[:-1] + 'd') if base_icon.endswith('n') else base_icon
+            if not icon_night and base_icon and base_icon != 'na':
+                icon_night = (base_icon[:-1] + 'n') if base_icon.endswith('d') else base_icon
+
+            entry['weather_icon_day'] = icon_day
+            entry['weather_icon_night'] = icon_night
             entry['original_provider_icon_code'] = None # Initialize
 
             if not entry['weather_icon'] or entry['weather_icon'] == 'na':

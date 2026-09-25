@@ -56,6 +56,7 @@ daily_forecast_display_details:
 - rain
 - wind
 - uvi
+daily_forecast_day_night: false
 cache_duration_minutes: 10
 graph_24h_forecast_config:
   base_font_size: 12
@@ -199,6 +200,31 @@ icon_configs:
       height: 80
       x_offset: -10
       y_offset: 10
+  daily_display_day_night:
+    google:
+      width: 38
+      height: 38
+      x_offset_day: 4
+      x_offset_night: 46
+      y_offset: 24
+    openweathermap:
+      width: 55
+      height: 55
+      x_offset_day: -10
+      x_offset_night: 35
+      y_offset: 16
+    meteomatics:
+      width: 55
+      height: 55
+      x_offset_day: -10
+      x_offset_night: 35
+      y_offset: 16
+    default:
+      width: 45
+      height: 45
+      x_offset_day: -2
+      x_offset_night: 40
+      y_offset: 20
   current_display:
     google:
       width: 80

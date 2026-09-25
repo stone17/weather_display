@@ -201,6 +201,8 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
             weather_main=daily_desc.split()[0] if daily_desc else "Unknown",
             weather_description=daily_desc,
             weather_icon=daily_icon,
+            weather_icon_day=(daily_icon[:-1] + 'd') if daily_icon and daily_icon.endswith('n') else daily_icon,
+            weather_icon_night=(daily_icon[:-1] + 'n') if daily_icon and daily_icon.endswith('d') else daily_icon,
             rain=day_data.get(precip_24h_param, 0.0),
             uvi=max(hourly_agg['uvis']) if hourly_agg['uvis'] else 0.0
             # pop, clouds, dew_point, sunrise/sunset etc. are not directly available from basic Meteomatics
