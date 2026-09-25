@@ -74,7 +74,9 @@ async def test_provider_image_generation(provider_id, base_config):
         provider_instance.get_hourly_data(),
         provider_instance.get_daily_data(),
         current_provider_config.get("temperature_unit", "C"),
-        graph_config=current_provider_config.get('graph_24h_forecast_config', {})
+        graph_config=current_provider_config.get('graph_24h_forecast_config', {}),
+        lat=current_provider_config.get("latitude"),
+        lon=current_provider_config.get("longitude")
     )
 
     if not weather_data_obj.has_sufficient_data():

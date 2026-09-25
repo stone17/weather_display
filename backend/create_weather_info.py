@@ -75,7 +75,9 @@ class WeatherService:
             provider.get_hourly_data(), 
             provider.get_daily_data(), 
             self.config.get("temperature_unit", "C"),
-            graph_config=graph_cfg
+            graph_config=graph_cfg,
+            lat=self.config.get("latitude"),
+            lon=self.config.get("longitude")
         )
         
         # 4. Setup Icon Cache

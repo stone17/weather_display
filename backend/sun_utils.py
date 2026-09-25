@@ -1,6 +1,51 @@
 import datetime
 from astral import LocationInfo
-from astral.sun import sun
+from astral.sun import sun, elevation
+
+def is_daylight(dt, lat, lon):
+    """
+    Determines if it is daytime at the specified datetime/timestamp and coordinates.
+    Returns True if sun is above the horizon, False if nighttime.
+    """
+    if lat is None or lon is None:
+        return None
+
+    try:
+        lat = float(lat)
+        lon = float(lon)
+    except (ValueError, TypeError):
+        return None
+
+    if isinstance(dt, (int, float)):
+        dt_utc = datetime.datetime.fromtimestamp(dt, tz=datetime.timezone.utc)
+    elif isinstance(dt, datetime.datetime):
+        if dt.tzinfo is None:
+            dt_utc = dt.replace(tzinfo=datetime.timezone.utc)
+        else:
+            dt_utc = dt.astimezone(datetime.timezone.utc)
+    else:
+        return None
+
+    city = LocationInfo("Custom", "Region", "UTC", lat, lon)
+    try:
+        target_date = dt_utc.date()
+        s = sun(city.observer, date=target_date)
+        if s['sunrise'] <= dt_utc < s['sunset']:
+            return True
+        # Check adjacent days for edge cases near UTC midnight
+        s_prev = sun(city.observer, date=target_date - datetime.timedelta(days=1))
+        if s_prev['sunrise'] <= dt_utc < s_prev['sunset']:
+            return True
+        s_next = sun(city.observer, date=target_date + datetime.timedelta(days=1))
+        if s_next['sunrise'] <= dt_utc < s_next['sunset']:
+            return True
+        return False
+    except Exception:
+        # Fallback for polar regions where sun() raises ValueError (midnight sun / polar night)
+        try:
+            return elevation(city.observer, dt_utc) > -0.833
+        except Exception:
+            return None
 
 def get_sunrise_sunset_times(lat, lon, target_date=None, tzinfo=None):
     """

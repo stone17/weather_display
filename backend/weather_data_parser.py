@@ -1,25 +1,98 @@
 # weather_data_parser.py
 from datetime import datetime, timezone, timedelta
 from typing import Union, Dict, Any
+import sun_utils
 
 class WeatherData:
     """
     Parses and prepares raw weather data for display.
     """
     def __init__(self, current_raw, hourly_raw, daily_raw, temp_unit_pref,
-                 graph_config=None): # Removed icon_provider_preference
+                 graph_config=None, lat=None, lon=None):
         self.current_raw = current_raw if current_raw is not None else {}
         self.hourly_raw = hourly_raw if hourly_raw is not None else []
         self.daily_raw = daily_raw if daily_raw is not None else []
-        # self.icon_provider_preference = icon_provider_preference.lower() # Removed
         self.graph_config = graph_config if graph_config is not None else {}
+
+        # Coordinates for astronomical sun calculations
+        raw_lat = lat if lat is not None else self.current_raw.get('lat')
+        if raw_lat is None and isinstance(self.current_raw.get('coord'), dict):
+            raw_lat = self.current_raw['coord'].get('lat')
+        raw_lon = lon if lon is not None else self.current_raw.get('lon')
+        if raw_lon is None and isinstance(self.current_raw.get('coord'), dict):
+            raw_lon = self.current_raw['coord'].get('lon')
+
+        try:
+            self.lat = float(raw_lat) if raw_lat is not None else None
+        except (ValueError, TypeError):
+            self.lat = None
+        try:
+            self.lon = float(raw_lon) if raw_lon is not None else None
+        except (ValueError, TypeError):
+            self.lon = None
+
         self.tz = self._determine_timezone()
+
+        # Build lookup map for daily sun events if available from raw daily data
+        self.daily_sun_events_map = {}
+        if self.daily_raw:
+            for day_data_point_raw in self.daily_raw:
+                if hasattr(day_data_point_raw, 'dt') and day_data_point_raw.dt and \
+                   hasattr(day_data_point_raw, 'sunrise') and day_data_point_raw.sunrise and \
+                   hasattr(day_data_point_raw, 'sunset') and day_data_point_raw.sunset:
+                    day_date_key = datetime.fromtimestamp(day_data_point_raw.dt, tz=timezone.utc).astimezone(self.tz).date()
+                    self.daily_sun_events_map[day_date_key] = (day_data_point_raw.sunrise, day_data_point_raw.sunset)
 
         self.current = self._parse_current_weather()
         self.hourly = self._parse_hourly_forecast()  # Note: Parsing, no conversion yet.
         self.daily = self._parse_daily_forecast()    # Same here.
         self.temperature_unit = temp_unit_pref.upper()
         self._convert_temperatures_if_needed() # Conversion happens after parsing.
+
+    def _is_daylight_at(self, dt_val):
+        """
+        Determines whether the given timestamp (UTC epoch) is in daylight.
+        Uses astronomical calculation via astral if coordinates are available.
+        Otherwise falls back to provider sunrise/sunset or local daytime hours.
+        """
+        if dt_val is None:
+            return True
+
+        if self.lat is not None and self.lon is not None:
+            daylight = sun_utils.is_daylight(dt_val, self.lat, self.lon)
+            if daylight is not None:
+                return daylight
+
+        dt_obj = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(self.tz)
+
+        # Fallback to daily sun events map
+        if dt_obj.date() in self.daily_sun_events_map:
+            sr, ss = self.daily_sun_events_map[dt_obj.date()]
+            if sr and ss:
+                return sr <= dt_val < ss
+
+        # Fallback to provider current sunrise/sunset if available
+        sunrise_ts = self.current_raw.get('sunrise')
+        sunset_ts = self.current_raw.get('sunset')
+        if sunrise_ts and sunset_ts:
+            return sunrise_ts <= dt_val < sunset_ts
+
+        # Fallback to local hour (6 AM to 6 PM)
+        return 6 <= dt_obj.hour < 18
+
+    def _adjust_icon_day_night(self, icon_code, dt_val):
+        """
+        Adjusts an OWM icon suffix ('d' or 'n') based on whether dt_val is in daylight.
+        """
+        if not icon_code or icon_code == 'na':
+            return icon_code
+
+        is_day = self._is_daylight_at(dt_val)
+        if is_day and icon_code.endswith('n'):
+            return icon_code[:-1] + 'd'
+        elif not is_day and icon_code.endswith('d'):
+            return icon_code[:-1] + 'n'
+        return icon_code
 
     def _determine_timezone(self):
         tz_name = self.current_raw.get('timezone')
@@ -78,24 +151,7 @@ class WeatherData:
         # Adjust current icon for day/night based on sunrise/sunset
         if raw_icon:
             dt_val = self.current_raw.get('dt')
-            sunrise_ts = self.current_raw.get('sunrise')
-            sunset_ts = self.current_raw.get('sunset')
-            
-            if dt_val and sunrise_ts and sunset_ts:
-                is_day = sunrise_ts <= dt_val < sunset_ts
-                print(f"DEBUG weather_data_parser: dt={dt_val} ({datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(self.tz)}), sunrise={sunrise_ts} ({datetime.fromtimestamp(sunrise_ts, tz=timezone.utc).astimezone(self.tz)}), sunset={sunset_ts} ({datetime.fromtimestamp(sunset_ts, tz=timezone.utc).astimezone(self.tz)}), is_day={is_day}")
-                if is_day and raw_icon.endswith('n'):
-                    raw_icon = raw_icon[:-1] + 'd'
-                elif not is_day and raw_icon.endswith('d'):
-                    raw_icon = raw_icon[:-1] + 'n'
-            elif dt_val:
-                # Fallback if no sunrise/sunset
-                dt_obj = datetime.fromtimestamp(dt_val, tz=timezone.utc).astimezone(self.tz)
-                is_day = 6 <= dt_obj.hour < 18
-                if is_day and raw_icon.endswith('n'):
-                    raw_icon = raw_icon[:-1] + 'd'
-                elif not is_day and raw_icon.endswith('d'):
-                    raw_icon = raw_icon[:-1] + 'n'
+            raw_icon = self._adjust_icon_day_night(raw_icon, dt_val)
                     
         current_parsed['weather_icon'] = raw_icon
         return current_parsed
@@ -142,19 +198,6 @@ class WeatherData:
         if not self.hourly_raw:
             return []
 
-        # Create a quick lookup for daily sunrise/sunset from self.daily_raw
-        # self.daily_raw is a list of DailyDataPoint objects
-        daily_sun_events_map = {}
-        if self.daily_raw:
-            for day_data_point_raw in self.daily_raw:
-                # Ensure the raw daily data point has 'dt', 'sunrise', and 'sunset' attributes
-                if hasattr(day_data_point_raw, 'dt') and day_data_point_raw.dt and \
-                   hasattr(day_data_point_raw, 'sunrise') and day_data_point_raw.sunrise and \
-                   hasattr(day_data_point_raw, 'sunset') and day_data_point_raw.sunset:
-                    
-                    day_date_key = datetime.fromtimestamp(day_data_point_raw.dt, tz=timezone.utc).astimezone(self.tz).date()
-                    daily_sun_events_map[day_date_key] = (day_data_point_raw.sunrise, day_data_point_raw.sunset)
-
         hours_to_display = self.graph_config.get('graph_time_range_hours', 24)
         for h_data in self.hourly_raw[:hours_to_display]:
             is_dict = isinstance(h_data, dict)
@@ -179,20 +222,7 @@ class WeatherData:
                 continue
 
             current_owm_icon = h_data.get('weather_icon') if is_dict else getattr(h_data, 'weather_icon', None)
-            adjusted_owm_icon = current_owm_icon # Start with the provided icon
-
-            # Adjust icon for day/night if it's a daytime icon and it's actually night
-            if current_owm_icon and current_owm_icon.endswith('d'):
-                sunrise_ts, sunset_ts = daily_sun_events_map.get(dt_obj.date(), (None, None))
-
-                if sunrise_ts and sunset_ts:
-                    # dt_val is already a UTC timestamp
-                    if not (sunrise_ts <= dt_val < sunset_ts): # It's nighttime
-                        adjusted_owm_icon = current_owm_icon[:-1] + 'n'
-                else:
-                    # Fallback: simple hour-based day/night if no sun events from daily data
-                    if not (6 <= dt_obj.hour < 18): # Crude approximation of night (6 AM to 6 PM UTC as day)
-                        adjusted_owm_icon = current_owm_icon[:-1] + 'n'
+            adjusted_owm_icon = self._adjust_icon_day_night(current_owm_icon, dt_val)
 
             entry = {
                 'dt': dt_obj,
