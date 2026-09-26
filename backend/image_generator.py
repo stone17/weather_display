@@ -114,8 +114,9 @@ def _plot_weather_symbols_for_series(current_ax, series_times, series_values, pa
                                 current_ax.add_artist(ab)
                         except Exception: pass
 
-def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_pos, width, height, default_font_path, base_font_size, project_root_path_for_icons, icon_provider_preference_from_config, app_config, icon_cache_path=None):
+def create_24h_forecast_section(weather_data, graph_plot_config, x_pos, y_pos, width, height, default_font_path, base_font_size, project_root_path_for_icons, icon_provider_preference_from_config, app_config, icon_cache_path=None):
     global image_canvas
+    parsed_hourly_data = weather_data.hourly
 
     if not parsed_hourly_data:
         print("Warning: No hourly forecast data provided for graph.")
@@ -212,11 +213,14 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
             is_first_on_left = False
         else:
             current_ax = ax_primary_left.twinx()
-            current_ax.spines["left"].set_position(("outward", left_spine_offset))
             current_ax.spines["right"].set_visible(False)
             current_ax.yaxis.tick_left()
             current_ax.yaxis.set_label_position("left")
-            left_spine_offset += spine_offset_increment
+            if not cfg.get('show_y_axis_ticks', True) and not cfg.get('show_y_axis_tick_labels', True):
+                current_ax.spines["left"].set_visible(False)
+            else:
+                current_ax.spines["left"].set_position(("outward", left_spine_offset))
+                left_spine_offset += spine_offset_increment
 
         # Combine data ranges for linked series robustly
         group_values = list(s_values)
@@ -348,11 +352,14 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
         else:
             if not ax_primary_right: ax_primary_right = ax_primary_left.twinx()
             current_ax = ax_primary_left.twinx()
-            current_ax.spines["right"].set_position(("outward", right_spine_offset))
             current_ax.spines["left"].set_visible(False)
             current_ax.yaxis.tick_right()
             current_ax.yaxis.set_label_position("right")
-            right_spine_offset += spine_offset_increment
+            if not cfg.get('show_y_axis_ticks', True) and not cfg.get('show_y_axis_tick_labels', True):
+                current_ax.spines["right"].set_visible(False)
+            else:
+                current_ax.spines["right"].set_position(("outward", right_spine_offset))
+                right_spine_offset += spine_offset_increment
 
         # Combine data ranges for linked series robustly
         group_values = list(s_values)
@@ -521,11 +528,10 @@ def create_24h_forecast_section(parsed_hourly_data, graph_plot_config, x_pos, y_
     # --- Day/Night Highlight ---
     dn_cfg = graph_plot_config.get('day_night_highlight', {})
     if dn_cfg.get('enabled', True):
-        lat = app_config.get('latitude'); lon = app_config.get('longitude')
-        if lat is not None and lon is not None:
-            intervals = sun_utils.get_night_intervals(lat, lon, min_time - timedelta(hours=12), max_time + timedelta(hours=12), mode=dn_cfg.get('mode', 'civil_twilight'))
-            for start, end in intervals:
-                ax_primary_left.axvspan(start, end, color=dn_cfg.get('color', 'lightgrey'), alpha=dn_cfg.get('alpha', 0.3), zorder=0.5, lw=0)
+        # Streamlined: use the same daylight logic as icons
+        intervals = weather_data.get_night_intervals(min_time - timedelta(hours=12), max_time + timedelta(hours=12))
+        for start, end in intervals:
+            ax_primary_left.axvspan(start, end, color=dn_cfg.get('color', 'lightgrey'), alpha=dn_cfg.get('alpha', 0.3), zorder=0.5, lw=0)
 
     # --- Legends ---
     legend_main_cfg = graph_plot_config.get('legend', {})
@@ -907,7 +913,7 @@ def generate_weather_image(weather_data, output_path, app_config, project_root_p
     graph_icon_provider_pref = app_config.get("icon_provider_graph", "openweathermap").lower()
 
     create_24h_forecast_section(
-        weather_data.hourly, graph_specific_config,
+        weather_data, graph_specific_config,
         hourly_forecast_x, hourly_forecast_y, hourly_forecast_width, hourly_forecast_height,
         font_path, graph_base_font_size,
         project_root_path, graph_icon_provider_pref, app_config,

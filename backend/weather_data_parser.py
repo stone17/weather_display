@@ -49,6 +49,47 @@ class WeatherData:
         self.temperature_unit = temp_unit_pref.upper()
         self._convert_temperatures_if_needed() # Conversion happens after parsing.
 
+    def get_night_intervals(self, start_dt, end_dt):
+        """
+        Calculates night intervals for the given timeframe.
+        Uses astronomical calculation via astral if coordinates are available.
+        Otherwise falls back to provider sunrise/sunset or daily sun events.
+        """
+        if self.lat is not None and self.lon is not None:
+            return sun_utils.get_night_intervals(self.lat, self.lon, start_dt, end_dt)
+            
+        # Fallback using daily sun events map or current sunrise/sunset
+        intervals = []
+        current_dt = start_dt - timedelta(days=1)
+        end_dt_plus = end_dt + timedelta(days=1)
+        
+        while current_dt <= end_dt_plus:
+            current_date = current_dt.date()
+            sunset_ts = None
+            sunrise_next_ts = None
+            
+            if current_date in self.daily_sun_events_map:
+                _, sunset_ts = self.daily_sun_events_map[current_date]
+            elif self.current_raw.get('sunset'):
+                # Very rough fallback if we only have current day's sunset
+                sunset_ts = self.current_raw.get('sunset') + (current_dt - datetime.now(self.tz)).days * 86400
+                
+            next_date = current_date + timedelta(days=1)
+            if next_date in self.daily_sun_events_map:
+                sunrise_next_ts, _ = self.daily_sun_events_map[next_date]
+            elif self.current_raw.get('sunrise'):
+                sunrise_next_ts = self.current_raw.get('sunrise') + (current_dt + timedelta(days=1) - datetime.now(self.tz)).days * 86400
+
+            if sunset_ts and sunrise_next_ts:
+                interval_start = datetime.fromtimestamp(sunset_ts, tz=timezone.utc).astimezone(self.tz)
+                interval_end = datetime.fromtimestamp(sunrise_next_ts, tz=timezone.utc).astimezone(self.tz)
+                if interval_start < end_dt and interval_end > start_dt:
+                    intervals.append((max(interval_start, start_dt), min(interval_end, end_dt)))
+            
+            current_dt += timedelta(days=1)
+            
+        return intervals
+
     def _is_daylight_at(self, dt_val):
         """
         Determines whether the given timestamp (UTC epoch) is in daylight.
