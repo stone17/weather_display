@@ -5,7 +5,7 @@ import math
 import traceback
 import aiohttp
 
-from weather_provider_base import WeatherProvider, parse_iso_time, HourlyDataPoint, DailyDataPoint
+from weather_provider_base import WeatherProvider, parse_iso_time, calculate_feels_like, HourlyDataPoint, DailyDataPoint
 
 # --- Meteomatics SYMBOL Mappings ---
 METEOMATICS_TO_OWM_ICON = {
@@ -98,17 +98,20 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         owm_icon = METEOMATICS_TO_OWM_ICON.get(symbol_idx, 'na')
         description = METEOMATICS_SYMBOL_DESC.get(symbol_idx, 'Unknown')
 
+        temp_float = float(temp_val)
+        wind_float = float(get_value_at_ts(wind_speed_param, ts_dt, 0.0))
+
         hourly_point = HourlyDataPoint(
             dt=int(ts_dt.timestamp()),
-            temp=float(temp_val),
-            feels_like=None, # Meteomatics basic doesn't provide feels_like per hour
+            temp=temp_float,
+            feels_like=calculate_feels_like(temp_float, wind_float, 50),
             pressure=1013.0, # Placeholder
             humidity=50, # Placeholder
             dew_point=0.0, # Placeholder
             uvi=float(get_value_at_ts(uv_param, ts_dt, 0.0)),
             clouds=50, # Placeholder
             visibility=10000, # Placeholder
-            wind_speed=float(get_value_at_ts(wind_speed_param, ts_dt, 0.0)),
+            wind_speed=wind_float,
             wind_deg=0, # Placeholder
             wind_gust=float(get_value_at_ts(wind_gust_24h_param, ts_dt, 0.0)), # Using 24h gust for hourly as approximation
             weather_id=symbol_idx,
@@ -182,6 +185,8 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
         daily_desc = METEOMATICS_SYMBOL_DESC.get(symbol_24h, 'Unknown')
         temp_day_approx = (temp_max + temp_min) / 2
 
+        avg_wind = sum(hourly_agg['winds']) / len(hourly_agg['winds']) if hourly_agg['winds'] else 0.0
+
         daily_point = DailyDataPoint(
             dt=day_ts,
             summary=daily_desc,
@@ -189,13 +194,13 @@ def transform_meteomatics_data(meteomatics_json, lat, lon):
             temp_min=temp_min,
             temp_max=temp_max,
             temp_night=temp_min, # Approximation
-                temp_eve=temp_min,   # Approximation
-                temp_morn=temp_min,  # Approximation
-                feels_like_day=None, # Approximation
-                feels_like_night=None,      # Approximation
-                pressure=1013.0, # Placeholder
+            temp_eve=temp_min,   # Approximation
+            temp_morn=temp_min,  # Approximation
+            feels_like_day=calculate_feels_like(temp_day_approx, avg_wind, 50),
+            feels_like_night=calculate_feels_like(temp_min, avg_wind, 50),
+            pressure=1013.0, # Placeholder
             humidity=50,    # Placeholder
-            wind_speed=sum(hourly_agg['winds']) / len(hourly_agg['winds']) if hourly_agg['winds'] else 0.0,
+            wind_speed=avg_wind,
             wind_gust=day_data.get(wind_gust_24h_param, 0.0),
             weather_id=symbol_24h,
             weather_main=daily_desc.split()[0] if daily_desc else "Unknown",

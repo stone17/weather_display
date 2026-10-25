@@ -4,7 +4,7 @@ import traceback
 import aiohttp
 from aiohttp import ClientResponseError
 
-from weather_provider_base import WeatherProvider, HourlyDataPoint, DailyDataPoint
+from weather_provider_base import WeatherProvider, calculate_feels_like, HourlyDataPoint, DailyDataPoint
 
 # --- SMHI SYMBOL Mappings ---
 SMHI_SYMBOL_TO_OWM_ICON = {
@@ -43,15 +43,19 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
             thunder = hour_dict.get('thunder', 0)
             if thunder > 0 and 'Thunder' not in description: description += " (Thunder)"
 
+            temp_val = hour_dict.get('temperature', 0.0)
+            wind_val = hour_dict.get('wind_speed', 0.0)
+            hum_val = hour_dict.get('humidity', 50)
+
             hourly_point = HourlyDataPoint(
                 dt=ts,
-                temp=hour_dict.get('temperature', 0.0),
-                feels_like=hour_dict.get('temperature', 0.0),
+                temp=temp_val,
+                feels_like=calculate_feels_like(temp_val, wind_val, hum_val),
                 pressure=hour_dict.get('pressure', 1013.0),
-                humidity=hour_dict.get('humidity', 50),
+                humidity=hum_val,
                 clouds=hour_dict.get('total_cloud', 50),
                 visibility=int(hour_dict.get('visibility', 10.0) * 1000),
-                wind_speed=hour_dict.get('wind_speed', 0.0),
+                wind_speed=wind_val,
                 wind_deg=hour_dict.get('wind_direction', 0),
                 wind_gust=hour_dict.get('wind_gust', 0.0),
                 weather_id=symbol,
@@ -90,20 +94,24 @@ def transform_smhi_data(smhi_daily, smhi_hourly, lat, lon):
             daily_icon_day = (daily_icon[:-1] + 'd') if daily_icon and daily_icon.endswith('n') else daily_icon
             daily_icon_night = (daily_icon[:-1] + 'n') if daily_icon and daily_icon.endswith('d') else daily_icon
 
+            temp_day_val = (temp_max + temp_min) / 2
+            day_wind = day_dict.get('wind_speed', 0.0)
+            day_hum = day_dict.get('humidity', 50)
+
             daily_point = DailyDataPoint(
                 dt=int(normalized_dt.timestamp()),
                 summary=description,
-                temp_day=(temp_max + temp_min) / 2,
+                temp_day=temp_day_val,
                 temp_min=temp_min,
                 temp_max=temp_max,
                 temp_night=temp_min,
                 temp_eve=temp_min,
                 temp_morn=temp_min,
-                feels_like_day=None,
-                feels_like_night=None,
+                feels_like_day=calculate_feels_like(temp_day_val, day_wind, day_hum),
+                feels_like_night=calculate_feels_like(temp_min, day_wind, day_hum),
                 pressure=day_dict.get('pressure', 1013.0),
-                humidity=day_dict.get('humidity', 50),
-                wind_speed=day_dict.get('wind_speed', 0.0),
+                humidity=day_hum,
+                wind_speed=day_wind,
                 wind_deg=day_dict.get('wind_direction', 0),
                 wind_gust=day_dict.get('wind_gust', 0.0),
                 weather_id=symbol,

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 import traceback
 import aiohttp
 
-from weather_provider_base import WeatherProvider, parse_iso_time, HourlyDataPoint, DailyDataPoint
+from weather_provider_base import WeatherProvider, parse_iso_time, calculate_feels_like, HourlyDataPoint, DailyDataPoint
 
 # --- MET Norway symbol_code Mappings ---
 METNO_SYMBOL_TO_OWM_ICON = {
@@ -215,10 +215,12 @@ def transform_metno_data(metno_json, lat, lon):
         rain_1h = 0.0 if is_snow else precip_1h
         snow_1h = precip_1h if is_snow else 0.0
 
+        feels_like = calculate_feels_like(temp, wind_speed, humidity)
+
         hourly_point = HourlyDataPoint(
             dt=ts,
             temp=temp,
-            feels_like=temp,
+            feels_like=feels_like,
             pressure=pressure,
             humidity=humidity,
             dew_point=dew_point,
@@ -318,6 +320,7 @@ def transform_metno_data(metno_json, lat, lon):
 
         normalized_dt = datetime(day_date.year, day_date.month, day_date.day, 0, 0, 0, tzinfo=timezone.utc)
         rep_h = day_entry['hourly']
+        rep_night_h = night_entry['hourly']
 
         daily_point = DailyDataPoint(
             dt=int(normalized_dt.timestamp()),
@@ -328,8 +331,8 @@ def transform_metno_data(metno_json, lat, lon):
             temp_night=temp_min,
             temp_eve=temp_min,
             temp_morn=temp_min,
-            feels_like_day=temp_day,
-            feels_like_night=temp_min,
+            feels_like_day=rep_h.feels_like if rep_h.feels_like is not None else calculate_feels_like(temp_day, rep_h.wind_speed, rep_h.humidity),
+            feels_like_night=rep_night_h.feels_like if rep_night_h.feels_like is not None else calculate_feels_like(temp_min, rep_night_h.wind_speed, rep_night_h.humidity),
             pressure=rep_h.pressure,
             humidity=rep_h.humidity,
             dew_point=rep_h.dew_point,

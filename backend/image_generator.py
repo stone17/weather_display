@@ -224,14 +224,14 @@ def create_24h_forecast_section(weather_data, graph_plot_config, x_pos, y_pos, w
 
         # Combine data ranges for linked series robustly
         group_values = list(s_values)
-        my_link = cfg.get('linked_to')
-        if my_link in [None, "", "None", "none"]: my_link = None
         my_param = cfg.get('parameter')
+        my_link = cfg.get('linked_to', 'temp' if my_param == 'feels_like' else None)
+        if my_link in [None, "", "None", "none"]: my_link = None
         
         for other_param, other_data in processed_series_data.items():
             if other_param == my_param: continue
             other_cfg = other_data['config']
-            other_link = other_cfg.get('linked_to')
+            other_link = other_cfg.get('linked_to', 'temp' if other_param == 'feels_like' else None)
             if other_link in [None, "", "None", "none"]: other_link = None
             
             is_linked = False
@@ -363,14 +363,14 @@ def create_24h_forecast_section(weather_data, graph_plot_config, x_pos, y_pos, w
 
         # Combine data ranges for linked series robustly
         group_values = list(s_values)
-        my_link = cfg.get('linked_to')
-        if my_link in [None, "", "None", "none"]: my_link = None
         my_param = cfg.get('parameter')
+        my_link = cfg.get('linked_to', 'temp' if my_param == 'feels_like' else None)
+        if my_link in [None, "", "None", "none"]: my_link = None
         
         for other_param, other_data in processed_series_data.items():
             if other_param == my_param: continue
             other_cfg = other_data['config']
-            other_link = other_cfg.get('linked_to')
+            other_link = other_cfg.get('linked_to', 'temp' if other_param == 'feels_like' else None)
             if other_link in [None, "", "None", "none"]: other_link = None
             
             is_linked = False
@@ -479,7 +479,8 @@ def create_24h_forecast_section(weather_data, graph_plot_config, x_pos, y_pos, w
 
     # --- Sync limits for linked axes ---
     for ax_info in plotted_axes_info:
-        my_link = ax_info['config'].get('linked_to')
+        ax_param = ax_info['parameter']
+        my_link = ax_info['config'].get('linked_to', 'temp' if ax_param == 'feels_like' else None)
         if my_link in [None, "", "None", "none"]: my_link = None
         
         if my_link:

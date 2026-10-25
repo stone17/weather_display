@@ -158,6 +158,13 @@ class ConfigManager:
                 else:
                     template['axis'] = axis_raw
                     template['show_y_axis_tick_labels'] = True
+
+                linked_to_val = form_data.get(f"series_{param}_linked_to")
+                if linked_to_val is not None:
+                    if linked_to_val.strip() == "":
+                        template.pop('linked_to', None)
+                    else:
+                        template['linked_to'] = linked_to_val.strip()
                     
                 # Scaling & Occupancy
                 try: template['data_occupancy_factor'] = float(form_data.get(f"series_{param}_occupancy", 0.8))

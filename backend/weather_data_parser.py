@@ -2,6 +2,7 @@
 from datetime import datetime, timezone, timedelta
 from typing import Union, Dict, Any
 import sun_utils
+from weather_provider_base import calculate_feels_like
 
 class WeatherData:
     """
@@ -154,8 +155,8 @@ class WeatherData:
 
     def _convert_temperatures_if_needed(self):
         if self.temperature_unit == "F":
-            self.current['temp_value'] = self._celsius_to_fahrenheit(self.current.get('temp_value',0))
-            self.current['feels_like_value'] = self._celsius_to_fahrenheit(self.current.get('feels_like_value',0))
+            self.current['temp_value'] = self._celsius_to_fahrenheit(self.current.get('temp_value'))
+            self.current['feels_like_value'] = self._celsius_to_fahrenheit(self.current.get('feels_like_value'))
             self.hourly = self._convert_hourly_temps(self.hourly)
             self.daily = self._convert_daily_temps(self.daily)
         self._prepare_current_weather_display_strings()
@@ -176,10 +177,16 @@ class WeatherData:
             return {}
             
         current_parsed = {}
-        current_parsed['temp_value'] = self.current_raw.get('temp')
-        current_parsed['feels_like_value'] = self.current_raw.get('feels_like')
-        current_parsed['humidity'] = self.current_raw.get('humidity')
-        current_parsed['wind_speed'] = self.current_raw.get('wind_speed')
+        temp_val = self.current_raw.get('temp')
+        feels_val = self.current_raw.get('feels_like')
+        hum_val = self.current_raw.get('humidity')
+        wind_val = self.current_raw.get('wind_speed')
+        if feels_val is None and temp_val is not None:
+            feels_val = calculate_feels_like(temp_val, wind_val, hum_val)
+        current_parsed['temp_value'] = temp_val
+        current_parsed['feels_like_value'] = feels_val
+        current_parsed['humidity'] = hum_val
+        current_parsed['wind_speed'] = wind_val
         # Format strings later in _format_temperature_strings()
         current_parsed['aqi'] = self.current_raw.get('aqi')
         current_parsed['dominant_pollutant'] = self.current_raw.get('dominant_pollutant')
@@ -240,7 +247,14 @@ class WeatherData:
             return []
 
         hours_to_display = self.graph_config.get('graph_time_range_hours', 24)
-        for h_data in self.hourly_raw[:hours_to_display]:
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        future_raw = [
+            h for h in self.hourly_raw
+            if ((h.get('dt') if isinstance(h, dict) else getattr(h, 'dt', None)) or 0) >= now_ts - 3600
+        ]
+        source_hourly = future_raw if future_raw else self.hourly_raw
+
+        for h_data in source_hourly[:hours_to_display]:
             is_dict = isinstance(h_data, dict)
             dt_val = h_data.get('dt') if is_dict else getattr(h_data, 'dt', None)
             
@@ -265,13 +279,20 @@ class WeatherData:
             current_owm_icon = h_data.get('weather_icon') if is_dict else getattr(h_data, 'weather_icon', None)
             adjusted_owm_icon = self._adjust_icon_day_night(current_owm_icon, dt_val)
 
+            h_temp = h_data.get('temp') if is_dict else getattr(h_data, 'temp', None)
+            h_feels = h_data.get('feels_like') if is_dict else getattr(h_data, 'feels_like', None)
+            h_hum = h_data.get('humidity') if is_dict else getattr(h_data, 'humidity', None)
+            h_wind = h_data.get('wind_speed') if is_dict else getattr(h_data, 'wind_speed', None)
+            if h_feels is None and h_temp is not None:
+                h_feels = calculate_feels_like(h_temp, h_wind, h_hum)
+
             entry = {
                 'dt': dt_obj,
-                'temp': h_data.get('temp') if is_dict else getattr(h_data, 'temp', None),
-                'feels_like': h_data.get('feels_like') if is_dict else getattr(h_data, 'feels_like', None),
-                'humidity': h_data.get('humidity') if is_dict else getattr(h_data, 'humidity', None),
+                'temp': h_temp,
+                'feels_like': h_feels,
+                'humidity': h_hum,
                 'uvi': h_data.get('uvi') if is_dict else getattr(h_data, 'uvi', None),
-                'wind_speed': h_data.get('wind_speed') if is_dict else getattr(h_data, 'wind_speed', None),
+                'wind_speed': h_wind,
                 'wind_deg': h_data.get('wind_deg') if is_dict else getattr(h_data, 'wind_deg', None),
                 'wind_gust': h_data.get('wind_gust') if is_dict else getattr(h_data, 'wind_gust', None),
                 'rain': h_data.get('rain_1h') if is_dict else getattr(h_data, 'rain_1h', None),
@@ -365,7 +386,8 @@ class WeatherData:
         for entry in hourly_data:
             if 'temp' in entry and isinstance(entry['temp'], (int, float)):
                 entry['temp'] = self._celsius_to_fahrenheit(entry['temp'])
-            # Feels-like could be added here if needed.
+            if 'feels_like' in entry and isinstance(entry['feels_like'], (int, float)):
+                entry['feels_like'] = self._celsius_to_fahrenheit(entry['feels_like'])
         return hourly_data
 
     def _convert_daily_temps(self, daily_data):

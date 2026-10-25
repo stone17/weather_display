@@ -33,6 +33,50 @@ def parse_google_date(date_obj):
         return int(dt_obj.timestamp())
     except Exception: return 0
 
+def calculate_feels_like(temp_c: Optional[float], wind_speed_ms: Optional[float] = 0.0, humidity: Optional[float] = None) -> Optional[float]:
+    """
+    Calculates apparent / 'feels like' temperature (°C) from air temperature (°C),
+    10m wind speed (m/s), and relative humidity (%).
+    - T <= 10°C and wind > 1.34 m/s (4.8 km/h): JAG/TI Wind Chill (used by MET Norway / Yr.no, SMHI, NWS).
+    - 10°C < T < 20°C and wind > 1.34 m/s: Smooth roll-off of wind chill to avoid step discontinuities on graphs.
+    - T >= 26.7°C (80°F) and RH >= 40%: NOAA Rothfusz Heat Index.
+    """
+    if temp_c is None:
+        return None
+    try:
+        t = float(temp_c)
+        v_ms = float(wind_speed_ms) if wind_speed_ms is not None else 0.0
+        v_kmh = max(0.0, v_ms * 3.6)
+
+        if t <= 10.0 and v_kmh > 4.8:
+            v_pow = v_kmh ** 0.16
+            wc = 13.12 + 0.6215 * t - 11.37 * v_pow + 0.3965 * t * v_pow
+            return round(min(t, wc), 1)
+        elif 10.0 < t < 20.0 and v_kmh > 4.8:
+            v_pow = v_kmh ** 0.16
+            wc_10 = 13.12 + 0.6215 * 10.0 - 11.37 * v_pow + 0.3965 * 10.0 * v_pow
+            cooling_10 = max(0.0, 10.0 - wc_10)
+            return round(t - cooling_10 * ((20.0 - t) / 10.0), 1)
+        elif t >= 26.7 and humidity is not None and float(humidity) >= 40.0:
+            rh = float(humidity)
+            t_f = (t * 9.0 / 5.0) + 32.0
+            hi_f = (
+                -42.379
+                + 2.04901523 * t_f
+                + 10.14333127 * rh
+                - 0.22475541 * t_f * rh
+                - 0.00683783 * t_f * t_f
+                - 0.05481717 * rh * rh
+                + 0.00122874 * t_f * t_f * rh
+                + 0.00085282 * t_f * rh * rh
+                - 0.00000199 * t_f * t_f * rh * rh
+            )
+            hi_c = (hi_f - 32.0) * 5.0 / 9.0
+            return round(max(t, hi_c), 1)
+        return round(t, 1)
+    except Exception:
+        return temp_c
+
 # --- Data Structures ---
 @dataclass
 class HourlyDataPoint:

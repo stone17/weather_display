@@ -83,21 +83,25 @@ def transform_open_meteo_data(om_json, lat, lon):
     tz_name = om_json.get('timezone', 'UTC')
     transformed_data = {'lat': lat, 'lon': lon, 'timezone': tz_name, 'timezone_offset': tz_offset,
                         'current': {}, 'hourly': [], 'daily': []}
-    current = om_json.get('current_weather')
+    current = om_json.get('current') or om_json.get('current_weather')
     if current:
         current_ts = parse_iso_time(current.get('time'))
-        current_temp = current.get('temperature')
-        current_icon = get_owm_icon_from_wmo_code(current.get('weather_code', 0), current.get('is_day', 1))
-        current_desc = get_wmo_code_description(current.get('weather_code', 0))
+        current_temp = current.get('temperature_2m') if current.get('temperature_2m') is not None else current.get('temperature')
+        w_code = current.get('weather_code') if current.get('weather_code') is not None else current.get('weathercode', 0)
+        is_day_val = current.get('is_day', 1)
+        current_icon = get_owm_icon_from_wmo_code(w_code, is_day_val)
+        current_desc = get_wmo_code_description(w_code)
+        wind_spd = current.get('wind_speed_10m') if current.get('wind_speed_10m') is not None else current.get('windspeed', 0)
+        wind_dir = current.get('wind_direction_10m') if current.get('wind_direction_10m') is not None else current.get('winddirection', 0)
         transformed_data['current'] = {
             'dt': current_ts, 'sunrise': 0, 'sunset': 0, 'temp': current_temp,
             'timezone': tz_name, 'timezone_offset': tz_offset,
             'feels_like': current.get('apparent_temperature'),
             'pressure': current.get('pressure_msl', 1013), 'humidity': current.get('relative_humidity_2m', 50),
             'dew_point': 0, 'uvi': 0, 'clouds': current.get('cloud_cover', 50), 'visibility': 10000,
-            'wind_speed': current.get('wind_speed_10m', 0), 'wind_deg': current.get('wind_direction_10m', 0),
+            'wind_speed': wind_spd, 'wind_deg': wind_dir,
             'wind_gust': current.get('wind_gusts_10m', 0),
-            'weather': [{'id': current.get('weather_code', 0), 'main': current_desc.split()[0], 'description': current_desc, 'icon': current_icon}],
+            'weather': [{'id': w_code, 'main': current_desc.split()[0], 'description': current_desc, 'icon': current_icon}],
             'rain': {'1h': current.get('rain', 0.0)}, 'snow': {'1h': current.get('snowfall', 0.0)}
         }
     hourly = om_json.get('hourly')
@@ -141,15 +145,19 @@ def transform_open_meteo_data(om_json, lat, lon):
                 snow_1h=get_hourly_val('snowfall', i, 0.0)
             )
             transformed_data['hourly'].append(hourly_point)
+        now_ts = int(datetime.now(timezone.utc).timestamp())
         if transformed_data['hourly'] and transformed_data['current']:
-             now_ts = int(datetime.now(timezone.utc).timestamp())
              cur_hourly = min(transformed_data['hourly'], key=lambda h: abs(h.dt - now_ts))
              if cur_hourly.uvi is not None:
                  transformed_data['current']['uvi'] = cur_hourly.uvi
              if transformed_data['current'].get('feels_like') is None:
                  transformed_data['current']['feels_like'] = cur_hourly.feels_like
 
-    transformed_data['hourly'] = transformed_data['hourly'][:48]
+        future_hourly = [h for h in transformed_data['hourly'] if h.dt >= now_ts - 3600]
+        if future_hourly:
+            transformed_data['hourly'] = future_hourly[:48]
+        else:
+            transformed_data['hourly'] = transformed_data['hourly'][:48]
     daily = om_json.get('daily')
     if daily and 'time' in daily:
         num_days = len(daily['time'])
@@ -220,7 +228,10 @@ class OpenMeteoProvider(WeatherProvider):
     async def _fetch_from_api(self):
         print(f"Fetching data from {self.provider_name}...")
         base_url = "https://api.open-meteo.com/v1/forecast"
-        params = { "latitude": self.lat, "longitude": self.lon, "current_weather": "true",
+        params = { "latitude": self.lat, "longitude": self.lon,
+                   "current": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "is_day",
+                               "precipitation", "rain", "snowfall", "weather_code", "cloud_cover",
+                               "pressure_msl", "wind_speed_10m", "wind_direction_10m", "wind_gusts_10m"],
                    "temperature_unit": "celsius", "wind_speed_unit": "ms", "precipitation_unit": "mm",
                    "timezone": "UTC", "forecast_days": 7,
                    "hourly": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "precipitation_probability",

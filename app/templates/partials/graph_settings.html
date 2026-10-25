@@ -83,11 +83,12 @@
                 </div>
                 <div class="col-6 col-md-2">
                     <label class="form-label small text-muted mb-0">Link Axis To</label>
+                    {% set cur_linked = s_conf.linked_to if (is_active and s_conf.linked_to is defined) else ('temp' if param_id == 'feels_like' else '') %}
                     <select class="form-select form-select-sm" name="series_{{param_id}}_linked_to">
                         <option value="">None</option>
-                        <option value="temp" {% if is_active and s_conf.linked_to == 'temp' %}selected{% endif %}>Temp</option>
-                        <option value="wind_speed" {% if is_active and s_conf.linked_to == 'wind_speed' %}selected{% endif %}>Wind Speed</option>
-                        <option value="rain" {% if is_active and s_conf.linked_to == 'rain' %}selected{% endif %}>Rain</option>
+                        <option value="temp" {% if cur_linked == 'temp' %}selected{% endif %}>Temp</option>
+                        <option value="wind_speed" {% if cur_linked == 'wind_speed' %}selected{% endif %}>Wind Speed</option>
+                        <option value="rain" {% if cur_linked == 'rain' %}selected{% endif %}>Rain</option>
                     </select>
                 </div>
                 <div class="col-6 col-md-2">
