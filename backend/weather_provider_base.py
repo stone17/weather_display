@@ -205,6 +205,7 @@ def get_weather_provider(config, project_root_path_from_caller):
     from providers.provider_openmeteo import OpenMeteoProvider
     from providers.provider_google import GoogleWeatherProvider
     from providers.provider_smhi import SMHIProvider
+    from providers.provider_metno import MetNoProvider
     from providers.provider_aqicn import AQICNProvider
 
     p_name = config.get("weather_provider", "openweathermap").lower()
@@ -239,6 +240,7 @@ def get_weather_provider(config, project_root_path_from_caller):
         elif p_name in ["open-meteo", "openmeteo"]: provider = OpenMeteoProvider(**common_args)
         elif p_name == "google": provider = GoogleWeatherProvider(config.get("google_api_key"), **common_args)
         elif p_name == "smhi": provider = SMHIProvider(**common_args)
+        elif p_name in ["metno", "met.no", "met_norway", "yr"]: provider = MetNoProvider(**common_args)
         elif p_name == "aqicn": provider = AQICNProvider(config.get("aqicn_api_token"), **common_args)
         else: return None
         
@@ -253,6 +255,7 @@ def get_weather_provider(config, project_root_path_from_caller):
             elif s_name in ["open-meteo", "openmeteo"]: s_inst = OpenMeteoProvider(**s_common)
             elif s_name == "google": s_inst = GoogleWeatherProvider(config.get("google_api_key"), **s_common)
             elif s_name == "smhi": s_inst = SMHIProvider(**s_common)
+            elif s_name in ["metno", "met.no", "met_norway", "yr"]: s_inst = MetNoProvider(**s_common)
             elif s_name == "aqicn": s_inst = AQICNProvider(config.get("aqicn_api_token"), **s_common)
             
             if s_inst: provider.supplemental_providers_info.append({'instance': s_inst, 'parameters': sup.get("parameters", [])})

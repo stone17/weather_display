@@ -33,6 +33,10 @@
         <small class="text-muted fst-italic">No API key required for SMHI.</small>
     </div>
 
+    <div id="apikey_metno" class="apikey-group" style="display:none;">
+        <small class="text-muted fst-italic">No API key required for MET Norway.</small>
+    </div>
+
     <div class="mt-2 pt-2 border-top">
         <a class="text-decoration-none small text-secondary" data-bs-toggle="collapse" href="#supplementalKeys" role="button">
             <i class="bi bi-gear"></i> Supplemental Keys (Google / AQICN)
@@ -95,7 +99,7 @@
 
 <script>
 let suppIndex = {{ config.get('supplemental_providers', [])|length }};
-const availableProviders = ["smhi", "owm", "open-meteo", "meteomatics", "google", "aqicn"];
+const availableProviders = ["smhi", "metno", "owm", "open-meteo", "meteomatics", "google", "aqicn"];
 const availableParams = ['temp', 'feels_like', 'humidity', 'pressure', 'wind_speed', 'wind_gust', 'rain', 'uvi', 'aqi', 'aqi_pm25_avg'];
 
 function addSuppProvider() {

@@ -1,6 +1,6 @@
 # ESP32 E-Paper Weather Display & Photo Frame
 
-This project displays weather information and photos on e-Paper displays (like Waveshare 5.65"/7.3" 7-color and reTerminal 1002 Spectra E6) connected to an ESP32. It fetches weather data from various providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, AQICN), generates an image with the forecast, applies advanced dithering, and uploads it to the ESP32 for display. Configuration is now managed through a convenient Web UI.
+This project displays weather information and photos on e-Paper displays (like Waveshare 5.65"/7.3" 7-color and reTerminal 1002 Spectra E6) connected to an ESP32. It fetches weather data from various providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, MET Norway, AQICN), generates an image with the forecast, applies advanced dithering, and uploads it to the ESP32 for display. Configuration is now managed through a convenient Web UI.
 
 ## Features
 
@@ -8,7 +8,7 @@ This project displays weather information and photos on e-Paper displays (like W
 * Displays current Air Quality Index (AQI) if configured.
 * Shows a detailed hourly forecast graph (temperature, wind, rain).
 * Provides a multi-day forecast summary (icons, high/low temperatures, rain, wind, UV, daily AQI).
-* Supports multiple weather data providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, AQICN) via configuration.
+* Supports multiple weather data providers (OpenWeatherMap, Open-Meteo, Meteomatics, Google Weather, SMHI, MET Norway, AQICN) via configuration.
 * **Mix and Match Data:** Optionally supplement data from the primary provider with specific parameters (like UV index, AQI) from other configured providers.
 * Selectable icon sources (OpenWeatherMap, Google, Meteomatics) for different parts of the display (current/daily vs. graph).
 * Caches weather data to reduce API calls.
@@ -120,25 +120,25 @@ This project displays weather information and photos on e-Paper displays (like W
 ## Weather Provider Parameter Support
 
 This table summarizes the weather parameters supported by each provider. Note that availability may vary based on location and specific API plans. This reflects a hypothetical, comprehensive dataset; actual support should be verified by testing and consulting provider documentation.
-| Parameter     | open-meteo | openweathermap | meteomatics | google | smhi | aqicn |
-| --------------- | :--------: | :------------: | :----------: | :----: | :-----------: | :----: |
-| `temp`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `feels_like`    |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |   ❌   |
-| `humidity`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `uvi`           |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |   ❌   |
-| `wind_speed`    |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `wind_gust`     |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `wind_deg`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `rain`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `snow`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `weather`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `hourly`        |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `daily`         |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `alerts`        |     ❌      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `precipitation` |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `summary`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |   ❌   |
-| `aqi` (current) |     ❌      |       ❌        |      ❌       |   ❌   |      ❌       |   ✅   |
-| `aqi` (daily)   |     ❌      |       ❌        |      ❌       |   ❌   |      ❌       |   ✅   |
+| Parameter     | open-meteo | openweathermap | meteomatics | google | smhi | metno | aqicn |
+| --------------- | :--------: | :------------: | :----------: | :----: | :-----------: | :---: | :----: |
+| `temp`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `feels_like`    |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |  ❌   |   ❌   |
+| `humidity`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `uvi`           |     ✅      |       ✅        |      ✅       |   ✅   |      ❌       |  ✅   |   ❌   |
+| `wind_speed`    |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `wind_gust`     |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `wind_deg`      |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `rain`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `snow`          |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `weather`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `hourly`        |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `daily`         |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `alerts`        |     ❌      |       ✅        |      ✅       |   ✅   |      ✅       |  ❌   |   ❌   |
+| `precipitation` |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `summary`       |     ✅      |       ✅        |      ✅       |   ✅   |      ✅       |  ✅   |   ❌   |
+| `aqi` (current) |     ❌      |       ❌        |      ❌       |   ❌   |      ❌       |  ❌   |   ✅   |
+| `aqi` (daily)   |     ❌      |       ❌        |      ❌       |   ❌   |      ❌       |  ❌   |   ✅   |
 
 
 ## Customization

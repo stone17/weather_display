@@ -30,6 +30,7 @@ provider_list:
 - meteomatics
 - google
 - smhi
+- metno
 parameter_list:
 - temp
 - feels_like

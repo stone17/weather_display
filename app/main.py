@@ -198,7 +198,7 @@ async def home(request: Request):
         name="index.html", 
         context={
             "request": request, "config": cfg.data, 
-            "providers": ["smhi", "owm", "open-meteo", "meteomatics", "google", "aqicn"], 
+            "providers": ["smhi", "metno", "owm", "open-meteo", "meteomatics", "google", "aqicn"], 
             "last_update": last_upd, "mqtt_status": mqtt_handler.connected, "message": msg,
             "photos": photos, "active_graph_series": active_series,
             "recent_logs": list(memory_log_handler.logs),

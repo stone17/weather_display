@@ -20,7 +20,7 @@ from weather_data_parser import WeatherData
 from image_generator import generate_weather_image
 from create_weather_info import load_configuration
 
-ALL_PROVIDER_IDS = ["openweathermap", "open-meteo", "meteomatics", "google", "smhi", "aqicn"]
+ALL_PROVIDER_IDS = ["openweathermap", "open-meteo", "meteomatics", "google", "smhi", "metno", "aqicn"]
 
 class SMHIDirectProbe:
     """Probes the SMHI API directly to check for version-specific 404 errors."""
